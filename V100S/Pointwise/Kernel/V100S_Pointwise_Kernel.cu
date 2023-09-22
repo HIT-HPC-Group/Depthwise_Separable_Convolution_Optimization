@@ -953,24 +953,26 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
     int inputBatchNumber, int inputChannel, int inputHeight, int inputWidth,
     int filterOutChannel, int filterInChannel, int filterHeight, int filterWidth,
     int outputBatchNumber, int outputChannel, int outputHeight, int outputWidth) {
+    
+    __shared__ float inputSharedBuffer1[7 * 7 * 8];
+    __shared__ float inputSharedBuffer2[7 * 7 * 8];
 
-    __shared__ float inputSharedBuffer1[];
-    __shared__ float inputSharedBuffer2[];
-
-    __shared__ float filterSharedBuffer1[];
-    __shared__ float filterSharedBuffer2[];
+    __shared__ float filterSharedBuffer1[7 * 80];
+    __shared__ float filterSharedBuffer2[7 * 80];
 
     // to hold loaded operands temp
     float inputTemp1 = 0, inputTemp2 = 0, inputTemp3 = 0, inputTemp4 = 0, inputTemp5 = 0, inputTemp6 = 0, inputTemp7 = 0;
-    float filterTemp1 = 0, filterTemp2 = 0, fitlerTemp3 = 0, filterTemp4 = 0, filterTemp5 = 0, filterTemp6 = 0, filterTemp7 = 0, filterTemp8 = 0, filterTemp9 = 0, filterTemp10 = 0;
-    float filterTemp11 = 0, filterTemp12 = 0, filterTemp13 = 0, filterTemp14 = 0, filterTemp15 = 0, filterTemp16 = 0, filterTemp17 = 0, filterTemp18 = 0, filterTemp19 = 0, filterTemp20 = 0;
+    float filterTemp1 = 0, filterTemp2 = 0, filterTemp3 = 0, filterTemp4 = 0, filterTemp5 = 0;
+    float filterTemp6 = 0, filterTemp7 = 0, filterTemp8 = 0, filterTemp9 = 0, filterTemp10 = 0;
+    float filterTemp11 = 0, filterTemp12 = 0, filterTemp13 = 0, filterTemp14 = 0, filterTemp15 = 0;
+    float filterTemp16 = 0, filterTemp17 = 0, filterTemp18 = 0, filterTemp19 = 0, filterTemp20 = 0;
 
     // to hold operands
     float inputOperand1 = 0, inputOperand2 = 0, inputOperand3 = 0, inputOperand4 = 0, inputOperand5 = 0, inputOperand6 = 0, inputOperand7 = 0;
-    float filterOperand1 = 0, filterOperand2 = 0, fitlerOperand3 = 0, filterOperand4 = 0, filterOperand5 = 0;
-    float filterOperand6 = 0, filterOperand7 = 0, fitlerOperand8 = 0, filterOperand9 = 0, filterOperand10 = 0;
-    float filterOperand11 = 0, filterOperand12 = 0, fitlerOperand13 = 0, filterOperand14 = 0, filterOperand15 = 0;
-    float filterOperand16 = 0, filterOperand17 = 0, fitlerOperand18 = 0, filterOperand19 = 0, filterOperand20 = 0;
+    float filterOperand1 = 0, filterOperand2 = 0, filterOperand3 = 0, filterOperand4 = 0, filterOperand5 = 0;
+    float filterOperand6 = 0, filterOperand7 = 0, filterOperand8 = 0, filterOperand9 = 0, filterOperand10 = 0;
+    float filterOperand11 = 0, filterOperand12 = 0, filterOperand13 = 0, filterOperand14 = 0, filterOperand15 = 0;
+    float filterOperand16 = 0, filterOperand17 = 0, filterOperand18 = 0, filterOperand19 = 0, filterOperand20 = 0;
 
     // to hold intermediate result
     float input1filter1 = 0, input1filter2 = 0, input1filter3 = 0, input1filter4 = 0, input1filter5 = 0; 
@@ -1010,548 +1012,570 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
 
     int warpID = threadIdx.x / 32;    //each block contains 7 warps, warpID 0 - 6
     int laneID = threadIdx.x % 32;
-    int blockOutputStartIdx = blockIdx.x * outputHeight * outputWidth * (outputChannel / 2);
     
-    // load Cnum 
+    // load Cnum channels data from input and filter, and store into shared buffer 1
+    // input
+    int blockLoadInputStartIdx = (blockIdx.x / 2) * inputChannel * inputHeight * inputWidth;
+    int inputLoadSrcIdx = blockLoadInputStartIdx + (threadIdx.x / (inputHeight * inputWidth)) * inputHeight * inputWidth + (threadIdx.x / inputWidth) * inputWidth + (threadIdx.x % inputWidth);
+    inputSharedBuffer1[threadIdx.x + 32 * 7 * 0] = input[inputLoadSrcIdx + 32 * 7 * 0];
+    if(threadIdx.x < 7 * 24){
+        inputSharedBuffer1[threadIdx.x + 32 * 7 * 1] = input[inputLoadSrcIdx + 32 * 7 * 1];
+    }
+    
+    // filter
+    int blockLoadFilterStartIdx = (blockIdx.x % 2) * inputChannel * (outputChannel / 2);
+    int filterLoadSrcIdx = blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8);
+    filterSharedBuffer1[threadIdx.x + 32 * 7 * 0] = filter[filterLoadSrcIdx + 28 * 576 * 0];    // 28 output channels
+    filterSharedBuffer1[threadIdx.x + 32 * 7 * 1] = filter[filterLoadSrcIdx + 28 * 576 * 1];    // 56 output channels
+    if(threadIdx.x < 7 * 24) {
+        filterSharedBuffer1[threadIdx.x + 32 * 7 * 2] = filter[filterLoadSrcIdx + 28 * 576 * 2]; // last 24 output channels
+    }
 
+    __syncthreads();
+    
     // For loop begins
-
-    // load next group of Cnum channels
-    inputTemp1 = input[];
-    inputTemp2 = input[];
-    inputTemp3 = input[];
-    inputTemp4 = input[];
-    inputTemp5 = input[];
-    inputTemp6 = input[];
-    inputTemp7 = input[];
-
-    filterTemp1 = filter[];
-    filterTemp2 = filter[];
-    fitlerTemp3 = filter[];
-    filterTemp4 = filter[];
-    filterTemp5 = filter[];
-    filterTemp6 = filter[];
-    filterTemp7 = filter[];
-    filterTemp8 = filter[];
-    filterTemp9 = filter[];
-    filterTemp10 = filter[];
-
-    filterTemp11 = filter[];
-    filterTemp12 = filter[];
-    filterTemp13 = filter[];
-    filterTemp14 = filter[];
-    filterTemp15 = filter[];
-    filterTemp16 = filter[];
-    filterTemp17 = filter[];
-    filterTemp18 = filter[];
-    filterTemp19 = filter[];
-    filterTemp20 = filter[];
-
-    // Copy operands from shared buffer 1 into Operands Registers
-    inputOperand1 = inputSharedBuffer1[];
-    inputOperand2 = inputSharedBuffer1[];
-    inputOperand3 = inputSharedBuffer1[];
-    inputOperand4 = inputSharedBuffer1[];
-    inputOperand5 = inputSharedBuffer1[];
-    inputOperand6 = inputSharedBuffer1[];
-    inputOperand7 = inputSharedBuffer1[];
-
-    filterOperand1 = filterSharedBuffer1[];
-    filterOperand2 = filterSharedBuffer1[];
-    fitlerOperand3 = filterSharedBuffer1[];
-    filterOperand4 = filterSharedBuffer1[];
-    filterOperand5 = filterSharedBuffer1[];
-
-    filterOperand6 = filterSharedBuffer1[];
-    filterOperand7 = filterSharedBuffer1[];
-    fitlerOperand8 = filterSharedBuffer1[];
-    filterOperand9 = filterSharedBuffer1[];
-    filterOperand10 = filterSharedBuffer1[];
-
-    filterOperand11 = filterSharedBuffer1[];
-    filterOperand12 = filterSharedBuffer1[];
-    fitlerOperand13 = filterSharedBuffer1[];
-    filterOperand14 = filterSharedBuffer1[];
-    filterOperand15 = filterSharedBuffer1[];
-
-    filterOperand16 = filterSharedBuffer1[];
-    filterOperand17 = filterSharedBuffer1[];
-    fitlerOperand18 = filterSharedBuffer1[];
-    filterOperand19 = filterSharedBuffer1[];
-    filterOperand20 = filterSharedBuffer1[];
-
-    // Compute and Accumulate result in Result Registers
-    input1filter1 += inputOperand1 * filterOperand1;
-    input1filter2 += inputOperand1 * filterOperand2;
-    input1filter3 += inputOperand1 * filterOperand3;
-    input1filter4 += inputOperand1 * filterOperand4;
-    input1filter5 += inputOperand1 * filterOperand5;
-
-    input1filter6 += inputOperand1 * filterOperand6;
-    input1filter7 += inputOperand1 * filterOperand7;
-    input1filter8 += inputOperand1 * filterOperand8;
-    input1filter9 += inputOperand1 * filterOperand9;
-    input1filter10 += inputOperand1 * filterOperand10;
-
-    input1filter11 += inputOperand1 * filterOperand11; 
-    input1filter12 += inputOperand1 * filterOperand12;
-    input1filter13 += inputOperand1 * filterOperand13;
-    input1filter14 += inputOperand1 * filterOperand14;
-    input1filter15 += inputOperand1 * filterOperand15;
-
-    input1filter16 += inputOperand1 * filterOperand16;
-    input1filter17 += inputOperand1 * filterOperand17;
-    input1filter18 += inputOperand1 * filterOperand18;
-    input1filter19 += inputOperand1 * filterOperand19;
-    input1filter20 += inputOperand1 * filterOperand20;
-
-    input2filter1 += inputOperand2 * filterOperand1;
-    input2filter2 += inputOperand2 * filterOperand2;
-    input2filter3 += inputOperand2 * filterOperand3;
-    input2filter4 += inputOperand2 * filterOperand4;
-    input2filter5 += inputOperand2 * filterOperand5;
-
-    input2filter6 += inputOperand2 * filterOperand6;
-    input2filter7 += inputOperand2 * filterOperand7;
-    input2filter8 += inputOperand2 * filterOperand8;
-    input2filter9 += inputOperand2 * filterOperand9;
-    input2filter10 += inputOperand2 * filterOperand10;
-
-    input2filter11 += inputOperand2 * filterOperand11; 
-    input2filter12 += inputOperand2 * filterOperand12;
-    input2filter13 += inputOperand2 * filterOperand13;
-    input2filter14 += inputOperand2 * filterOperand14;
-    input2filter15 += inputOperand2 * filterOperand15;
-
-    input2filter16 += inputOperand2 * filterOperand16;
-    input2filter17 += inputOperand2 * filterOperand17;
-    input2filter18 += inputOperand2 * filterOperand18;
-    input2filter19 += inputOperand2 * filterOperand19;
-    input2filter20 += inputOperand2 * filterOperand20;
-
-    input3filter1 += inputOperand3 * filterOperand1;
-    input3filter2 += inputOperand3 * filterOperand2;
-    input3filter3 += inputOperand3 * filterOperand3;
-    input3filter4 += inputOperand3 * filterOperand4;
-    input3filter5 += inputOperand3 * filterOperand5;
-
-    input3filter6 += inputOperand3 * filterOperand6;
-    input3filter7 += inputOperand3 * filterOperand7;
-    input3filter8 += inputOperand3 * filterOperand8;
-    input3filter9 += inputOperand3 * filterOperand9;
-    input3filter10 += inputOperand3 * filterOperand10;
-
-    input3filter11 += inputOperand3 * filterOperand11; 
-    input3filter12 += inputOperand3 * filterOperand12;
-    input3filter13 += inputOperand3 * filterOperand13;
-    input3filter14 += inputOperand3 * filterOperand14;
-    input3filter15 += inputOperand3 * filterOperand15;
-
-    input3filter16 += inputOperand3 * filterOperand16;
-    input3filter17 += inputOperand3 * filterOperand17;
-    input3filter18 += inputOperand3 * filterOperand18;
-    input3filter19 += inputOperand3 * filterOperand19;
-    input3filter20 += inputOperand3 * filterOperand20;
-
-    input4filter1 += inputOperand4 * filterOperand1;
-    input4filter2 += inputOperand4 * filterOperand2;
-    input4filter3 += inputOperand4 * filterOperand3;
-    input4filter4 += inputOperand4 * filterOperand4;
-    input4filter5 += inputOperand4 * filterOperand5;
-
-    input4filter6 += inputOperand4 * filterOperand6;
-    input4filter7 += inputOperand4 * filterOperand7;
-    input4filter8 += inputOperand4 * filterOperand8;
-    input4filter9 += inputOperand4 * filterOperand9;
-    input4filter10 += inputOperand4 * filterOperand10;
-
-    input4filter11 += inputOperand4 * filterOperand11; 
-    input4filter12 += inputOperand4 * filterOperand12;
-    input4filter13 += inputOperand4 * filterOperand13;
-    input4filter14 += inputOperand4 * filterOperand14;
-    input4filter15 += inputOperand4 * filterOperand15;
-
-    input4filter16 += inputOperand4 * filterOperand16;
-    input4filter17 += inputOperand4 * filterOperand17;
-    input4filter18 += inputOperand4 * filterOperand18;
-    input4filter19 += inputOperand4 * filterOperand19;
-    input4filter20 += inputOperand4 * filterOperand20;
-
-    input5filter1 += inputOperand5 * filterOperand1;
-    input5filter2 += inputOperand5 * filterOperand2;
-    input5filter3 += inputOperand5 * filterOperand3;
-    input5filter4 += inputOperand5 * filterOperand4;
-    input5filter5 += inputOperand5 * filterOperand5;
-
-    input5filter6 += inputOperand5 * filterOperand6;
-    input5filter7 += inputOperand5 * filterOperand7;
-    input5filter8 += inputOperand5 * filterOperand8;
-    input5filter9 += inputOperand5 * filterOperand9;
-    input5filter10 += inputOperand5 * filterOperand10;
-
-    input5filter11 += inputOperand5 * filterOperand11; 
-    input5filter12 += inputOperand5 * filterOperand12;
-    input5filter13 += inputOperand5 * filterOperand13;
-    input5filter14 += inputOperand5 * filterOperand14;
-    input5filter15 += inputOperand5 * filterOperand15;
-
-    input5filter16 += inputOperand5 * filterOperand16;
-    input5filter17 += inputOperand5 * filterOperand17;
-    input5filter18 += inputOperand5 * filterOperand18;
-    input5filter19 += inputOperand5 * filterOperand19;
-    input5filter20 += inputOperand5 * filterOperand20;
-
-    input6filter1 += inputOperand6 * filterOperand1;
-    input6filter2 += inputOperand6 * filterOperand2;
-    input6filter3 += inputOperand6 * filterOperand3;
-    input6filter4 += inputOperand6 * filterOperand4;
-    input6filter5 += inputOperand6 * filterOperand5;
-
-    input6filter6 += inputOperand6 * filterOperand6;
-    input6filter7 += inputOperand6 * filterOperand7;
-    input6filter8 += inputOperand6 * filterOperand8;
-    input6filter9 += inputOperand6 * filterOperand9;
-    input6filter10 += inputOperand6 * filterOperand10;
-
-    input6filter11 += inputOperand6 * filterOperand11; 
-    input6filter12 += inputOperand6 * filterOperand12;
-    input6filter13 += inputOperand6 * filterOperand13;
-    input6filter14 += inputOperand6 * filterOperand14;
-    input6filter15 += inputOperand6 * filterOperand15;
-
-    input6filter16 += inputOperand6 * filterOperand16;
-    input6filter17 += inputOperand6 * filterOperand17;
-    input6filter18 += inputOperand6 * filterOperand18;
-    input6filter19 += inputOperand6 * filterOperand19;
-    input6filter20 += inputOperand6 * filterOperand20
-
-    input7filter1 += inputOperand7 * filterOperand1;
-    input7filter2 += inputOperand7 * filterOperand2;
-    input7filter3 += inputOperand7 * filterOperand3;
-    input7filter4 += inputOperand7 * filterOperand4;
-    input7filter5 += inputOperand7 * filterOperand5;
-
-    input7filter6 += inputOperand7 * filterOperand6;
-    input7filter7 += inputOperand7 * filterOperand7;
-    input7filter8 += inputOperand7 * filterOperand8;
-    input7filter9 += inputOperand7 * filterOperand9;
-    input7filter10 += inputOperand7 * filterOperand10;
-
-    input7filter11 += inputOperand7 * filterOperand11; 
-    input7filter12 += inputOperand7 * filterOperand12;
-    input7filter13 += inputOperand7 * filterOperand13;
-    input7filter14 += inputOperand7 * filterOperand14;
-    input7filter15 += inputOperand7 * filterOperand15;
-
-    input7filter16 += inputOperand7 * filterOperand16;
-    input7filter17 += inputOperand7 * filterOperand17;
-    input7filter18 += inputOperand7 * filterOperand18;
-    input7filter19 += inputOperand7 * filterOperand19;
-    input7filter20 += inputOperand7 * filterOperand20;
-
-    // Copy Temp Registers to shared buffer 2
-    inputSharedBuffer2[] = inputTemp1;
-    inputSharedBuffer2[] = inputTemp2;
-    inputSharedBuffer2[] = inputTemp3;
-    inputSharedBuffer2[] = inputTemp4;
-    inputSharedBuffer2[] = inputTemp5;
-    inputSharedBuffer2[] = inputTemp6;
-    inputSharedBuffer2[] = inputTemp7;
-
-    filterSharedBuffer2[] = filterTemp1;
-    filterSharedBuffer2[] = filterTemp2;
-    filterSharedBuffer2[] = filterTemp3;
-    filterSharedBuffer2[] = filterTemp4;
-    filterSharedBuffer2[] = filterTemp5;
-
-    filterSharedBuffer2[] = filterTemp6;
-    filterSharedBuffer2[] = filterTemp7;
-    filterSharedBuffer2[] = filterTemp8;
-    filterSharedBuffer2[] = filterTemp9;
-    filterSharedBuffer2[] = filterTemp10;
-
-    filterSharedBuffer2[] = filterTemp11;
-    filterSharedBuffer2[] = filterTemp12;
-    filterSharedBuffer2[] = filterTemp13;
-    filterSharedBuffer2[] = filterTemp14;
-    filterSharedBuffer2[] = filterTemp15;
-
-    filterSharedBuffer2[] = filterTemp16;
-    filterSharedBuffer2[] = filterTemp17;
-    filterSharedBuffer2[] = filterTemp18;
-    filterSharedBuffer2[] = filterTemp19;
-    filterSharedBuffer2[] = filterTemp20;
-
-    __syncthreads();
-
-    // Exchange shared buffer 1 and shared buffer 2 and repeat
-    // load next group of Cnum channels
-    inputTemp1 = input[];
-    inputTemp2 = input[];
-    inputTemp3 = input[];
-    inputTemp4 = input[];
-    inputTemp5 = input[];
-    inputTemp6 = input[];
-    inputTemp7 = input[];
-
-    filterTemp1 = filter[];
-    filterTemp2 = filter[];
-    fitlerTemp3 = filter[];
-    filterTemp4 = filter[];
-    filterTemp5 = filter[];
-    filterTemp6 = filter[];
-    filterTemp7 = filter[];
-    filterTemp8 = filter[];
-    filterTemp9 = filter[];
-    filterTemp10 = filter[];
-
-    filterTemp11 = filter[];
-    filterTemp12 = filter[];
-    filterTemp13 = filter[];
-    filterTemp14 = filter[];
-    filterTemp15 = filter[];
-    filterTemp16 = filter[];
-    filterTemp17 = filter[];
-    filterTemp18 = filter[];
-    filterTemp19 = filter[];
-    filterTemp20 = filter[];
-
-    // Copy operands from shared buffer 1 into Operands Registers
-    inputOperand1 = inputSharedBuffer2[];
-    inputOperand2 = inputSharedBuffer2[];
-    inputOperand3 = inputSharedBuffer2[];
-    inputOperand4 = inputSharedBuffer2[];
-    inputOperand5 = inputSharedBuffer2[];
-    inputOperand6 = inputSharedBuffer2[];
-    inputOperand7 = inputSharedBuffer2[];
-
-    filterOperand1 = filterSharedBuffer2[];
-    filterOperand2 = filterSharedBuffer2[];
-    fitlerOperand3 = filterSharedBuffer2[];
-    filterOperand4 = filterSharedBuffer2[];
-    filterOperand5 = filterSharedBuffer2[];
-
-    filterOperand6 = filterSharedBuffer2[];
-    filterOperand7 = filterSharedBuffer2[];
-    fitlerOperand8 = filterSharedBuffer2[];
-    filterOperand9 = filterSharedBuffer2[];
-    filterOperand10 = filterSharedBuffer2[];
-
-    filterOperand11 = filterSharedBuffer2[];
-    filterOperand12 = filterSharedBuffer2[];
-    fitlerOperand13 = filterSharedBuffer2[];
-    filterOperand14 = filterSharedBuffer2[];
-    filterOperand15 = filterSharedBuffer2[];
-
-    filterOperand16 = filterSharedBuffer2[];
-    filterOperand17 = filterSharedBuffer2[];
-    fitlerOperand18 = filterSharedBuffer2[];
-    filterOperand19 = filterSharedBuffer2[];
-    filterOperand20 = filterSharedBuffer2[];
-
-    // Compute and Accumulate result in Result Registers
-    input1filter1 += inputOperand1 * filterOperand1;
-    input1filter2 += inputOperand1 * filterOperand2;
-    input1filter3 += inputOperand1 * filterOperand3;
-    input1filter4 += inputOperand1 * filterOperand4;
-    input1filter5 += inputOperand1 * filterOperand5;
-
-    input1filter6 += inputOperand1 * filterOperand6;
-    input1filter7 += inputOperand1 * filterOperand7;
-    input1filter8 += inputOperand1 * filterOperand8;
-    input1filter9 += inputOperand1 * filterOperand9;
-    input1filter10 += inputOperand1 * filterOperand10;
-
-    input1filter11 += inputOperand1 * filterOperand11; 
-    input1filter12 += inputOperand1 * filterOperand12;
-    input1filter13 += inputOperand1 * filterOperand13;
-    input1filter14 += inputOperand1 * filterOperand14;
-    input1filter15 += inputOperand1 * filterOperand15;
-
-    input1filter16 += inputOperand1 * filterOperand16;
-    input1filter17 += inputOperand1 * filterOperand17;
-    input1filter18 += inputOperand1 * filterOperand18;
-    input1filter19 += inputOperand1 * filterOperand19;
-    input1filter20 += inputOperand1 * filterOperand20;
-
-    input2filter1 += inputOperand2 * filterOperand1;
-    input2filter2 += inputOperand2 * filterOperand2;
-    input2filter3 += inputOperand2 * filterOperand3;
-    input2filter4 += inputOperand2 * filterOperand4;
-    input2filter5 += inputOperand2 * filterOperand5;
-
-    input2filter6 += inputOperand2 * filterOperand6;
-    input2filter7 += inputOperand2 * filterOperand7;
-    input2filter8 += inputOperand2 * filterOperand8;
-    input2filter9 += inputOperand2 * filterOperand9;
-    input2filter10 += inputOperand2 * filterOperand10;
-
-    input2filter11 += inputOperand2 * filterOperand11; 
-    input2filter12 += inputOperand2 * filterOperand12;
-    input2filter13 += inputOperand2 * filterOperand13;
-    input2filter14 += inputOperand2 * filterOperand14;
-    input2filter15 += inputOperand2 * filterOperand15;
-
-    input2filter16 += inputOperand2 * filterOperand16;
-    input2filter17 += inputOperand2 * filterOperand17;
-    input2filter18 += inputOperand2 * filterOperand18;
-    input2filter19 += inputOperand2 * filterOperand19;
-    input2filter20 += inputOperand2 * filterOperand20;
-
-    input3filter1 += inputOperand3 * filterOperand1;
-    input3filter2 += inputOperand3 * filterOperand2;
-    input3filter3 += inputOperand3 * filterOperand3;
-    input3filter4 += inputOperand3 * filterOperand4;
-    input3filter5 += inputOperand3 * filterOperand5;
-
-    input3filter6 += inputOperand3 * filterOperand6;
-    input3filter7 += inputOperand3 * filterOperand7;
-    input3filter8 += inputOperand3 * filterOperand8;
-    input3filter9 += inputOperand3 * filterOperand9;
-    input3filter10 += inputOperand3 * filterOperand10;
-
-    input3filter11 += inputOperand3 * filterOperand11; 
-    input3filter12 += inputOperand3 * filterOperand12;
-    input3filter13 += inputOperand3 * filterOperand13;
-    input3filter14 += inputOperand3 * filterOperand14;
-    input3filter15 += inputOperand3 * filterOperand15;
-
-    input3filter16 += inputOperand3 * filterOperand16;
-    input3filter17 += inputOperand3 * filterOperand17;
-    input3filter18 += inputOperand3 * filterOperand18;
-    input3filter19 += inputOperand3 * filterOperand19;
-    input3filter20 += inputOperand3 * filterOperand20;
-
-    input4filter1 += inputOperand4 * filterOperand1;
-    input4filter2 += inputOperand4 * filterOperand2;
-    input4filter3 += inputOperand4 * filterOperand3;
-    input4filter4 += inputOperand4 * filterOperand4;
-    input4filter5 += inputOperand4 * filterOperand5;
-
-    input4filter6 += inputOperand4 * filterOperand6;
-    input4filter7 += inputOperand4 * filterOperand7;
-    input4filter8 += inputOperand4 * filterOperand8;
-    input4filter9 += inputOperand4 * filterOperand9;
-    input4filter10 += inputOperand4 * filterOperand10;
-
-    input4filter11 += inputOperand4 * filterOperand11; 
-    input4filter12 += inputOperand4 * filterOperand12;
-    input4filter13 += inputOperand4 * filterOperand13;
-    input4filter14 += inputOperand4 * filterOperand14;
-    input4filter15 += inputOperand4 * filterOperand15;
-
-    input4filter16 += inputOperand4 * filterOperand16;
-    input4filter17 += inputOperand4 * filterOperand17;
-    input4filter18 += inputOperand4 * filterOperand18;
-    input4filter19 += inputOperand4 * filterOperand19;
-    input4filter20 += inputOperand4 * filterOperand20;
-
-    input5filter1 += inputOperand5 * filterOperand1;
-    input5filter2 += inputOperand5 * filterOperand2;
-    input5filter3 += inputOperand5 * filterOperand3;
-    input5filter4 += inputOperand5 * filterOperand4;
-    input5filter5 += inputOperand5 * filterOperand5;
-
-    input5filter6 += inputOperand5 * filterOperand6;
-    input5filter7 += inputOperand5 * filterOperand7;
-    input5filter8 += inputOperand5 * filterOperand8;
-    input5filter9 += inputOperand5 * filterOperand9;
-    input5filter10 += inputOperand5 * filterOperand10;
-
-    input5filter11 += inputOperand5 * filterOperand11; 
-    input5filter12 += inputOperand5 * filterOperand12;
-    input5filter13 += inputOperand5 * filterOperand13;
-    input5filter14 += inputOperand5 * filterOperand14;
-    input5filter15 += inputOperand5 * filterOperand15;
-
-    input5filter16 += inputOperand5 * filterOperand16;
-    input5filter17 += inputOperand5 * filterOperand17;
-    input5filter18 += inputOperand5 * filterOperand18;
-    input5filter19 += inputOperand5 * filterOperand19;
-    input5filter20 += inputOperand5 * filterOperand20;
-
-    input6filter1 += inputOperand6 * filterOperand1;
-    input6filter2 += inputOperand6 * filterOperand2;
-    input6filter3 += inputOperand6 * filterOperand3;
-    input6filter4 += inputOperand6 * filterOperand4;
-    input6filter5 += inputOperand6 * filterOperand5;
-
-    input6filter6 += inputOperand6 * filterOperand6;
-    input6filter7 += inputOperand6 * filterOperand7;
-    input6filter8 += inputOperand6 * filterOperand8;
-    input6filter9 += inputOperand6 * filterOperand9;
-    input6filter10 += inputOperand6 * filterOperand10;
-
-    input6filter11 += inputOperand6 * filterOperand11; 
-    input6filter12 += inputOperand6 * filterOperand12;
-    input6filter13 += inputOperand6 * filterOperand13;
-    input6filter14 += inputOperand6 * filterOperand14;
-    input6filter15 += inputOperand6 * filterOperand15;
-
-    input6filter16 += inputOperand6 * filterOperand16;
-    input6filter17 += inputOperand6 * filterOperand17;
-    input6filter18 += inputOperand6 * filterOperand18;
-    input6filter19 += inputOperand6 * filterOperand19;
-    input6filter20 += inputOperand6 * filterOperand20
-
-    input7filter1 += inputOperand7 * filterOperand1;
-    input7filter2 += inputOperand7 * filterOperand2;
-    input7filter3 += inputOperand7 * filterOperand3;
-    input7filter4 += inputOperand7 * filterOperand4;
-    input7filter5 += inputOperand7 * filterOperand5;
-
-    input7filter6 += inputOperand7 * filterOperand6;
-    input7filter7 += inputOperand7 * filterOperand7;
-    input7filter8 += inputOperand7 * filterOperand8;
-    input7filter9 += inputOperand7 * filterOperand9;
-    input7filter10 += inputOperand7 * filterOperand10;
-
-    input7filter11 += inputOperand7 * filterOperand11; 
-    input7filter12 += inputOperand7 * filterOperand12;
-    input7filter13 += inputOperand7 * filterOperand13;
-    input7filter14 += inputOperand7 * filterOperand14;
-    input7filter15 += inputOperand7 * filterOperand15;
-
-    input7filter16 += inputOperand7 * filterOperand16;
-    input7filter17 += inputOperand7 * filterOperand17;
-    input7filter18 += inputOperand7 * filterOperand18;
-    input7filter19 += inputOperand7 * filterOperand19;
-    input7filter20 += inputOperand7 * filterOperand20;
-
-    // Copy Temp Registers to shared buffer 2
-    inputSharedBuffer1[] = inputTemp1;
-    inputSharedBuffer1[] = inputTemp2;
-    inputSharedBuffer1[] = inputTemp3;
-    inputSharedBuffer1[] = inputTemp4;
-    inputSharedBuffer1[] = inputTemp5;
-    inputSharedBuffer1[] = inputTemp6;
-    inputSharedBuffer1[] = inputTemp7;
-
-    filterSharedBuffer1[] = filterTemp1;
-    filterSharedBuffer1[] = filterTemp2;
-    filterSharedBuffer1[] = filterTemp3;
-    filterSharedBuffer1[] = filterTemp4;
-    filterSharedBuffer1[] = filterTemp5;
-
-    filterSharedBuffer1[] = filterTemp6;
-    filterSharedBuffer1[] = filterTemp7;
-    filterSharedBuffer1[] = filterTemp8;
-    filterSharedBuffer1[] = filterTemp9;
-    filterSharedBuffer1[] = filterTemp10;
-
-    filterSharedBuffer1[] = filterTemp11;
-    filterSharedBuffer1[] = filterTemp12;
-    filterSharedBuffer1[] = filterTemp13;
-    filterSharedBuffer1[] = filterTemp14;
-    filterSharedBuffer1[] = filterTemp15;
-
-    filterSharedBuffer1[] = filterTemp16;
-    filterSharedBuffer1[] = filterTemp17;
-    filterSharedBuffer1[] = filterTemp18;
-    filterSharedBuffer1[] = filterTemp19;
-    filterSharedBuffer1[] = filterTemp20;
-
-    __syncthreads();
+    for(int i = 0; i < inputChannel / (2 * 8); i++) {
+        // load next group of Cnum channels
+        blockLoadInputStartIdx += 7 * 7 * 8;
+        inputTemp1 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 0];
+        inputTemp2 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 1];
+        inputTemp3 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 2];
+        inputTemp4 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 3];
+        inputTemp5 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 4];
+        inputTemp6 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 5];
+        inputTemp7 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 6];
+
+        blockLoadFilterStartIdx += 8;
+        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 0];
+        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 1];
+        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 2];
+        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 3];
+        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 4];
+        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 5];
+        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 6];
+        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 7];
+        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 8];
+        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 9];
+
+        filterTemp11 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 10];
+        filterTemp12 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 11];
+        filterTemp13 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 12];
+        filterTemp14 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 13];
+        filterTemp15 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 14];
+        filterTemp16 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 15];
+        filterTemp17 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 16];
+        filterTemp18 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 17];
+        filterTemp19 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 18];
+        filterTemp20 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 19];
+
+        // Copy operands from shared buffer 1 into Operands Registers
+        inputOperand1 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 0];
+        inputOperand2 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 1];
+        inputOperand3 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 2];
+        inputOperand4 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 3];
+        inputOperand5 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 4];
+        inputOperand6 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 5];
+        inputOperand7 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 6];
+
+        filterOperand1 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0];
+        filterOperand2 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1];
+        filterOperand3 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2];
+        filterOperand4 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3];
+        filterOperand5 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4];
+
+        filterOperand6 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5];
+        filterOperand7 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6];
+        filterOperand8 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7];
+        filterOperand9 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8];
+        filterOperand10 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9];
+
+        filterOperand11 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10];
+        filterOperand12 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11];
+        filterOperand13 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12];
+        filterOperand14 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13];
+        filterOperand15 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14];
+
+        filterOperand16 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15];
+        filterOperand17 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16];
+        filterOperand18 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17];
+        filterOperand19 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18];
+        filterOperand20 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19];
+
+        // Compute and Accumulate result in Result Registers
+        input1filter1 += inputOperand1 * filterOperand1;
+        input1filter2 += inputOperand1 * filterOperand2;
+        input1filter3 += inputOperand1 * filterOperand3;
+        input1filter4 += inputOperand1 * filterOperand4;
+        input1filter5 += inputOperand1 * filterOperand5;
+
+        input1filter6 += inputOperand1 * filterOperand6;
+        input1filter7 += inputOperand1 * filterOperand7;
+        input1filter8 += inputOperand1 * filterOperand8;
+        input1filter9 += inputOperand1 * filterOperand9;
+        input1filter10 += inputOperand1 * filterOperand10;
+
+        input1filter11 += inputOperand1 * filterOperand11; 
+        input1filter12 += inputOperand1 * filterOperand12;
+        input1filter13 += inputOperand1 * filterOperand13;
+        input1filter14 += inputOperand1 * filterOperand14;
+        input1filter15 += inputOperand1 * filterOperand15;
+
+        input1filter16 += inputOperand1 * filterOperand16;
+        input1filter17 += inputOperand1 * filterOperand17;
+        input1filter18 += inputOperand1 * filterOperand18;
+        input1filter19 += inputOperand1 * filterOperand19;
+        input1filter20 += inputOperand1 * filterOperand20;
+
+        input2filter1 += inputOperand2 * filterOperand1;
+        input2filter2 += inputOperand2 * filterOperand2;
+        input2filter3 += inputOperand2 * filterOperand3;
+        input2filter4 += inputOperand2 * filterOperand4;
+        input2filter5 += inputOperand2 * filterOperand5;
+
+        input2filter6 += inputOperand2 * filterOperand6;
+        input2filter7 += inputOperand2 * filterOperand7;
+        input2filter8 += inputOperand2 * filterOperand8;
+        input2filter9 += inputOperand2 * filterOperand9;
+        input2filter10 += inputOperand2 * filterOperand10;
+
+        input2filter11 += inputOperand2 * filterOperand11; 
+        input2filter12 += inputOperand2 * filterOperand12;
+        input2filter13 += inputOperand2 * filterOperand13;
+        input2filter14 += inputOperand2 * filterOperand14;
+        input2filter15 += inputOperand2 * filterOperand15;
+
+        input2filter16 += inputOperand2 * filterOperand16;
+        input2filter17 += inputOperand2 * filterOperand17;
+        input2filter18 += inputOperand2 * filterOperand18;
+        input2filter19 += inputOperand2 * filterOperand19;
+        input2filter20 += inputOperand2 * filterOperand20;
+
+        input3filter1 += inputOperand3 * filterOperand1;
+        input3filter2 += inputOperand3 * filterOperand2;
+        input3filter3 += inputOperand3 * filterOperand3;
+        input3filter4 += inputOperand3 * filterOperand4;
+        input3filter5 += inputOperand3 * filterOperand5;
+
+        input3filter6 += inputOperand3 * filterOperand6;
+        input3filter7 += inputOperand3 * filterOperand7;
+        input3filter8 += inputOperand3 * filterOperand8;
+        input3filter9 += inputOperand3 * filterOperand9;
+        input3filter10 += inputOperand3 * filterOperand10;
+
+        input3filter11 += inputOperand3 * filterOperand11; 
+        input3filter12 += inputOperand3 * filterOperand12;
+        input3filter13 += inputOperand3 * filterOperand13;
+        input3filter14 += inputOperand3 * filterOperand14;
+        input3filter15 += inputOperand3 * filterOperand15;
+
+        input3filter16 += inputOperand3 * filterOperand16;
+        input3filter17 += inputOperand3 * filterOperand17;
+        input3filter18 += inputOperand3 * filterOperand18;
+        input3filter19 += inputOperand3 * filterOperand19;
+        input3filter20 += inputOperand3 * filterOperand20;
+
+        input4filter1 += inputOperand4 * filterOperand1;
+        input4filter2 += inputOperand4 * filterOperand2;
+        input4filter3 += inputOperand4 * filterOperand3;
+        input4filter4 += inputOperand4 * filterOperand4;
+        input4filter5 += inputOperand4 * filterOperand5;
+
+        input4filter6 += inputOperand4 * filterOperand6;
+        input4filter7 += inputOperand4 * filterOperand7;
+        input4filter8 += inputOperand4 * filterOperand8;
+        input4filter9 += inputOperand4 * filterOperand9;
+        input4filter10 += inputOperand4 * filterOperand10;
+
+        input4filter11 += inputOperand4 * filterOperand11; 
+        input4filter12 += inputOperand4 * filterOperand12;
+        input4filter13 += inputOperand4 * filterOperand13;
+        input4filter14 += inputOperand4 * filterOperand14;
+        input4filter15 += inputOperand4 * filterOperand15;
+
+        input4filter16 += inputOperand4 * filterOperand16;
+        input4filter17 += inputOperand4 * filterOperand17;
+        input4filter18 += inputOperand4 * filterOperand18;
+        input4filter19 += inputOperand4 * filterOperand19;
+        input4filter20 += inputOperand4 * filterOperand20;
+
+        input5filter1 += inputOperand5 * filterOperand1;
+        input5filter2 += inputOperand5 * filterOperand2;
+        input5filter3 += inputOperand5 * filterOperand3;
+        input5filter4 += inputOperand5 * filterOperand4;
+        input5filter5 += inputOperand5 * filterOperand5;
+
+        input5filter6 += inputOperand5 * filterOperand6;
+        input5filter7 += inputOperand5 * filterOperand7;
+        input5filter8 += inputOperand5 * filterOperand8;
+        input5filter9 += inputOperand5 * filterOperand9;
+        input5filter10 += inputOperand5 * filterOperand10;
+
+        input5filter11 += inputOperand5 * filterOperand11; 
+        input5filter12 += inputOperand5 * filterOperand12;
+        input5filter13 += inputOperand5 * filterOperand13;
+        input5filter14 += inputOperand5 * filterOperand14;
+        input5filter15 += inputOperand5 * filterOperand15;
+
+        input5filter16 += inputOperand5 * filterOperand16;
+        input5filter17 += inputOperand5 * filterOperand17;
+        input5filter18 += inputOperand5 * filterOperand18;
+        input5filter19 += inputOperand5 * filterOperand19;
+        input5filter20 += inputOperand5 * filterOperand20;
+
+        input6filter1 += inputOperand6 * filterOperand1;
+        input6filter2 += inputOperand6 * filterOperand2;
+        input6filter3 += inputOperand6 * filterOperand3;
+        input6filter4 += inputOperand6 * filterOperand4;
+        input6filter5 += inputOperand6 * filterOperand5;
+
+        input6filter6 += inputOperand6 * filterOperand6;
+        input6filter7 += inputOperand6 * filterOperand7;
+        input6filter8 += inputOperand6 * filterOperand8;
+        input6filter9 += inputOperand6 * filterOperand9;
+        input6filter10 += inputOperand6 * filterOperand10;
+
+        input6filter11 += inputOperand6 * filterOperand11; 
+        input6filter12 += inputOperand6 * filterOperand12;
+        input6filter13 += inputOperand6 * filterOperand13;
+        input6filter14 += inputOperand6 * filterOperand14;
+        input6filter15 += inputOperand6 * filterOperand15;
+
+        input6filter16 += inputOperand6 * filterOperand16;
+        input6filter17 += inputOperand6 * filterOperand17;
+        input6filter18 += inputOperand6 * filterOperand18;
+        input6filter19 += inputOperand6 * filterOperand19;
+        input6filter20 += inputOperand6 * filterOperand20;
+
+        input7filter1 += inputOperand7 * filterOperand1;
+        input7filter2 += inputOperand7 * filterOperand2;
+        input7filter3 += inputOperand7 * filterOperand3;
+        input7filter4 += inputOperand7 * filterOperand4;
+        input7filter5 += inputOperand7 * filterOperand5;
+
+        input7filter6 += inputOperand7 * filterOperand6;
+        input7filter7 += inputOperand7 * filterOperand7;
+        input7filter8 += inputOperand7 * filterOperand8;
+        input7filter9 += inputOperand7 * filterOperand9;
+        input7filter10 += inputOperand7 * filterOperand10;
+
+        input7filter11 += inputOperand7 * filterOperand11; 
+        input7filter12 += inputOperand7 * filterOperand12;
+        input7filter13 += inputOperand7 * filterOperand13;
+        input7filter14 += inputOperand7 * filterOperand14;
+        input7filter15 += inputOperand7 * filterOperand15;
+
+        input7filter16 += inputOperand7 * filterOperand16;
+        input7filter17 += inputOperand7 * filterOperand17;
+        input7filter18 += inputOperand7 * filterOperand18;
+        input7filter19 += inputOperand7 * filterOperand19;
+        input7filter20 += inputOperand7 * filterOperand20;
+
+        // Copy Temp Registers to shared buffer 2
+        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 0] = inputTemp1;
+        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 1] = inputTemp2;
+        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 2] = inputTemp3;
+        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 3] = inputTemp4;
+        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 4] = inputTemp5;
+        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 5] = inputTemp6;
+        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 6] = inputTemp7;
+
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0] = filterTemp1;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1] = filterTemp2;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2] = filterTemp3;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3] = filterTemp4;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4] = filterTemp5;
+
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5] = filterTemp6;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6] = filterTemp7;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7] = filterTemp8;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8] = filterTemp9;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9] = filterTemp10;
+
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10] = filterTemp11;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11] = filterTemp12;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12] = filterTemp13;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13] = filterTemp14;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14] = filterTemp15;
+
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15] = filterTemp16;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16] = filterTemp17;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17] = filterTemp18;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18] = filterTemp19;
+        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19] = filterTemp20;
+
+        __syncthreads();
+
+        // Exchange shared buffer 1 and shared buffer 2 and repeat
+        // load next group of Cnum channels
+        blockLoadInputStartIdx += 7 * 7 * 8;
+        inputTemp1 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 0];
+        inputTemp2 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 1];
+        inputTemp3 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 2];
+        inputTemp4 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 3];
+        inputTemp5 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 4];
+        inputTemp6 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 5];
+        inputTemp7 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 6];
+
+        blockLoadFilterStartIdx += 8;
+        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 0];
+        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 1];
+        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 2];
+        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 3];
+        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 4];
+        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 5];
+        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 6];
+        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 7];
+        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 8];
+        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 9];
+
+        filterTemp11 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 10];
+        filterTemp12 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 11];
+        filterTemp13 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 12];
+        filterTemp14 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 13];
+        filterTemp15 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 14];
+        filterTemp16 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 15];
+        filterTemp17 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 16];
+        filterTemp18 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 17];
+        filterTemp19 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 18];
+        filterTemp20 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 19];
+
+        // Copy operands from shared buffer 2 into Operands Registers
+        inputOperand1 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 0];
+        inputOperand2 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 1];
+        inputOperand3 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 2];
+        inputOperand4 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 3];
+        inputOperand5 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 4];
+        inputOperand6 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 5];
+        inputOperand7 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 6];
+
+        filterOperand1 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0];
+        filterOperand2 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1];
+        filterOperand3 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2];
+        filterOperand4 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3];
+        filterOperand5 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4];
+
+        filterOperand6 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5];
+        filterOperand7 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6];
+        filterOperand8 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7];
+        filterOperand9 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8];
+        filterOperand10 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9];
+
+        filterOperand11 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10];
+        filterOperand12 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11];
+        filterOperand13 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12];
+        filterOperand14 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13];
+        filterOperand15 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14];
+
+        filterOperand16 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15];
+        filterOperand17 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16];
+        filterOperand18 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17];
+        filterOperand19 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18];
+        filterOperand20 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19];
+
+        // Compute and Accumulate result in Result Registers
+        input1filter1 += inputOperand1 * filterOperand1;
+        input1filter2 += inputOperand1 * filterOperand2;
+        input1filter3 += inputOperand1 * filterOperand3;
+        input1filter4 += inputOperand1 * filterOperand4;
+        input1filter5 += inputOperand1 * filterOperand5;
+
+        input1filter6 += inputOperand1 * filterOperand6;
+        input1filter7 += inputOperand1 * filterOperand7;
+        input1filter8 += inputOperand1 * filterOperand8;
+        input1filter9 += inputOperand1 * filterOperand9;
+        input1filter10 += inputOperand1 * filterOperand10;
+
+        input1filter11 += inputOperand1 * filterOperand11; 
+        input1filter12 += inputOperand1 * filterOperand12;
+        input1filter13 += inputOperand1 * filterOperand13;
+        input1filter14 += inputOperand1 * filterOperand14;
+        input1filter15 += inputOperand1 * filterOperand15;
+
+        input1filter16 += inputOperand1 * filterOperand16;
+        input1filter17 += inputOperand1 * filterOperand17;
+        input1filter18 += inputOperand1 * filterOperand18;
+        input1filter19 += inputOperand1 * filterOperand19;
+        input1filter20 += inputOperand1 * filterOperand20;
+
+        input2filter1 += inputOperand2 * filterOperand1;
+        input2filter2 += inputOperand2 * filterOperand2;
+        input2filter3 += inputOperand2 * filterOperand3;
+        input2filter4 += inputOperand2 * filterOperand4;
+        input2filter5 += inputOperand2 * filterOperand5;
+
+        input2filter6 += inputOperand2 * filterOperand6;
+        input2filter7 += inputOperand2 * filterOperand7;
+        input2filter8 += inputOperand2 * filterOperand8;
+        input2filter9 += inputOperand2 * filterOperand9;
+        input2filter10 += inputOperand2 * filterOperand10;
+
+        input2filter11 += inputOperand2 * filterOperand11; 
+        input2filter12 += inputOperand2 * filterOperand12;
+        input2filter13 += inputOperand2 * filterOperand13;
+        input2filter14 += inputOperand2 * filterOperand14;
+        input2filter15 += inputOperand2 * filterOperand15;
+
+        input2filter16 += inputOperand2 * filterOperand16;
+        input2filter17 += inputOperand2 * filterOperand17;
+        input2filter18 += inputOperand2 * filterOperand18;
+        input2filter19 += inputOperand2 * filterOperand19;
+        input2filter20 += inputOperand2 * filterOperand20;
+
+        input3filter1 += inputOperand3 * filterOperand1;
+        input3filter2 += inputOperand3 * filterOperand2;
+        input3filter3 += inputOperand3 * filterOperand3;
+        input3filter4 += inputOperand3 * filterOperand4;
+        input3filter5 += inputOperand3 * filterOperand5;
+
+        input3filter6 += inputOperand3 * filterOperand6;
+        input3filter7 += inputOperand3 * filterOperand7;
+        input3filter8 += inputOperand3 * filterOperand8;
+        input3filter9 += inputOperand3 * filterOperand9;
+        input3filter10 += inputOperand3 * filterOperand10;
+
+        input3filter11 += inputOperand3 * filterOperand11; 
+        input3filter12 += inputOperand3 * filterOperand12;
+        input3filter13 += inputOperand3 * filterOperand13;
+        input3filter14 += inputOperand3 * filterOperand14;
+        input3filter15 += inputOperand3 * filterOperand15;
+
+        input3filter16 += inputOperand3 * filterOperand16;
+        input3filter17 += inputOperand3 * filterOperand17;
+        input3filter18 += inputOperand3 * filterOperand18;
+        input3filter19 += inputOperand3 * filterOperand19;
+        input3filter20 += inputOperand3 * filterOperand20;
+
+        input4filter1 += inputOperand4 * filterOperand1;
+        input4filter2 += inputOperand4 * filterOperand2;
+        input4filter3 += inputOperand4 * filterOperand3;
+        input4filter4 += inputOperand4 * filterOperand4;
+        input4filter5 += inputOperand4 * filterOperand5;
+
+        input4filter6 += inputOperand4 * filterOperand6;
+        input4filter7 += inputOperand4 * filterOperand7;
+        input4filter8 += inputOperand4 * filterOperand8;
+        input4filter9 += inputOperand4 * filterOperand9;
+        input4filter10 += inputOperand4 * filterOperand10;
+
+        input4filter11 += inputOperand4 * filterOperand11; 
+        input4filter12 += inputOperand4 * filterOperand12;
+        input4filter13 += inputOperand4 * filterOperand13;
+        input4filter14 += inputOperand4 * filterOperand14;
+        input4filter15 += inputOperand4 * filterOperand15;
+
+        input4filter16 += inputOperand4 * filterOperand16;
+        input4filter17 += inputOperand4 * filterOperand17;
+        input4filter18 += inputOperand4 * filterOperand18;
+        input4filter19 += inputOperand4 * filterOperand19;
+        input4filter20 += inputOperand4 * filterOperand20;
+
+        input5filter1 += inputOperand5 * filterOperand1;
+        input5filter2 += inputOperand5 * filterOperand2;
+        input5filter3 += inputOperand5 * filterOperand3;
+        input5filter4 += inputOperand5 * filterOperand4;
+        input5filter5 += inputOperand5 * filterOperand5;
+
+        input5filter6 += inputOperand5 * filterOperand6;
+        input5filter7 += inputOperand5 * filterOperand7;
+        input5filter8 += inputOperand5 * filterOperand8;
+        input5filter9 += inputOperand5 * filterOperand9;
+        input5filter10 += inputOperand5 * filterOperand10;
+
+        input5filter11 += inputOperand5 * filterOperand11; 
+        input5filter12 += inputOperand5 * filterOperand12;
+        input5filter13 += inputOperand5 * filterOperand13;
+        input5filter14 += inputOperand5 * filterOperand14;
+        input5filter15 += inputOperand5 * filterOperand15;
+
+        input5filter16 += inputOperand5 * filterOperand16;
+        input5filter17 += inputOperand5 * filterOperand17;
+        input5filter18 += inputOperand5 * filterOperand18;
+        input5filter19 += inputOperand5 * filterOperand19;
+        input5filter20 += inputOperand5 * filterOperand20;
+
+        input6filter1 += inputOperand6 * filterOperand1;
+        input6filter2 += inputOperand6 * filterOperand2;
+        input6filter3 += inputOperand6 * filterOperand3;
+        input6filter4 += inputOperand6 * filterOperand4;
+        input6filter5 += inputOperand6 * filterOperand5;
+
+        input6filter6 += inputOperand6 * filterOperand6;
+        input6filter7 += inputOperand6 * filterOperand7;
+        input6filter8 += inputOperand6 * filterOperand8;
+        input6filter9 += inputOperand6 * filterOperand9;
+        input6filter10 += inputOperand6 * filterOperand10;
+
+        input6filter11 += inputOperand6 * filterOperand11; 
+        input6filter12 += inputOperand6 * filterOperand12;
+        input6filter13 += inputOperand6 * filterOperand13;
+        input6filter14 += inputOperand6 * filterOperand14;
+        input6filter15 += inputOperand6 * filterOperand15;
+
+        input6filter16 += inputOperand6 * filterOperand16;
+        input6filter17 += inputOperand6 * filterOperand17;
+        input6filter18 += inputOperand6 * filterOperand18;
+        input6filter19 += inputOperand6 * filterOperand19;
+        input6filter20 += inputOperand6 * filterOperand20;
+
+        input7filter1 += inputOperand7 * filterOperand1;
+        input7filter2 += inputOperand7 * filterOperand2;
+        input7filter3 += inputOperand7 * filterOperand3;
+        input7filter4 += inputOperand7 * filterOperand4;
+        input7filter5 += inputOperand7 * filterOperand5;
+
+        input7filter6 += inputOperand7 * filterOperand6;
+        input7filter7 += inputOperand7 * filterOperand7;
+        input7filter8 += inputOperand7 * filterOperand8;
+        input7filter9 += inputOperand7 * filterOperand9;
+        input7filter10 += inputOperand7 * filterOperand10;
+
+        input7filter11 += inputOperand7 * filterOperand11; 
+        input7filter12 += inputOperand7 * filterOperand12;
+        input7filter13 += inputOperand7 * filterOperand13;
+        input7filter14 += inputOperand7 * filterOperand14;
+        input7filter15 += inputOperand7 * filterOperand15;
+
+        input7filter16 += inputOperand7 * filterOperand16;
+        input7filter17 += inputOperand7 * filterOperand17;
+        input7filter18 += inputOperand7 * filterOperand18;
+        input7filter19 += inputOperand7 * filterOperand19;
+        input7filter20 += inputOperand7 * filterOperand20;
+
+        // Copy Temp Registers to shared buffer 2
+        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 0] = inputTemp1;
+        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 1] = inputTemp2;
+        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 2] = inputTemp3;
+        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 3] = inputTemp4;
+        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 4] = inputTemp5;
+        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 5] = inputTemp6;
+        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 6] = inputTemp7;
+
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0] = filterTemp1;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1] = filterTemp2;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2] = filterTemp3;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3] = filterTemp4;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4] = filterTemp5;
+
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5] = filterTemp6;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6] = filterTemp7;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7] = filterTemp8;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8] = filterTemp9;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9] = filterTemp10;
+
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10] = filterTemp11;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11] = filterTemp12;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12] = filterTemp13;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13] = filterTemp14;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14] = filterTemp15;
+
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15] = filterTemp16;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16] = filterTemp17;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17] = filterTemp18;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18] = filterTemp19;
+        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19] = filterTemp20;
+
+        __syncthreads();
+    }
     // For loop ends here
 
     // Parallel Reduction to store output values
