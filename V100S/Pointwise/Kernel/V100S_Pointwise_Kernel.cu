@@ -1578,9 +1578,343 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
     }
     // For loop ends here
 
-    // Parallel Reduction to store output values
+    // Parallel Reduction to accumulate result across threads
+    // Cnum threads form one group
+    #pragma unroll
+    for (int offset = (8 >> 1); offset > 0; offset >>= 1) {
+        input1filter1 += __shfl_down_sync(0xffffffff, input1filter1, offset, 8);
+        input1filter2 += __shfl_down_sync(0xffffffff, input1filter2, offset, 8);
+        input1filter3 += __shfl_down_sync(0xffffffff, input1filter3, offset, 8);
+        input1filter4 += __shfl_down_sync(0xffffffff, input1filter4, offset, 8);
+        input1filter5 += __shfl_down_sync(0xffffffff, input1filter5, offset, 8);
 
+        input1filter6 += __shfl_down_sync(0xffffffff, input1filter6, offset, 8);
+        input1filter7 += __shfl_down_sync(0xffffffff, input1filter7, offset, 8);
+        input1filter8 += __shfl_down_sync(0xffffffff, input1filter8, offset, 8);
+        input1filter9 += __shfl_down_sync(0xffffffff, input1filter9, offset, 8);
+        input1filter10 += __shfl_down_sync(0xffffffff, input1filter10, offset, 8);
 
+        input1filter11 += __shfl_down_sync(0xffffffff, input1filter11, offset, 8);
+        input1filter12 += __shfl_down_sync(0xffffffff, input1filter12, offset, 8);
+        input1filter13 += __shfl_down_sync(0xffffffff, input1filter13, offset, 8);
+        input1filter14 += __shfl_down_sync(0xffffffff, input1filter14, offset, 8);
+        input1filter15 += __shfl_down_sync(0xffffffff, input1filter15, offset, 8);
+
+        input1filter16 += __shfl_down_sync(0xffffffff, input1filter16, offset, 8);
+        input1filter17 += __shfl_down_sync(0xffffffff, input1filter17, offset, 8);
+        input1filter18 += __shfl_down_sync(0xffffffff, input1filter18, offset, 8);
+        input1filter19 += __shfl_down_sync(0xffffffff, input1filter19, offset, 8);
+        input1filter20 += __shfl_down_sync(0xffffffff, input1filter20, offset, 8);
+
+        input2filter1 += __shfl_down_sync(0xffffffff, input2filter1, offset, 8);
+        input2filter2 += __shfl_down_sync(0xffffffff, input2filter2, offset, 8);
+        input2filter3 += __shfl_down_sync(0xffffffff, input2filter3, offset, 8);
+        input2filter4 += __shfl_down_sync(0xffffffff, input2filter4, offset, 8);
+        input2filter5 += __shfl_down_sync(0xffffffff, input2filter5, offset, 8);
+
+        input2filter6 += __shfl_down_sync(0xffffffff, input2filter6, offset, 8);
+        input2filter7 += __shfl_down_sync(0xffffffff, input2filter7, offset, 8);
+        input2filter8 += __shfl_down_sync(0xffffffff, input2filter8, offset, 8);
+        input2filter9 += __shfl_down_sync(0xffffffff, input2filter9, offset, 8);
+        input2filter10 += __shfl_down_sync(0xffffffff, input2filter10, offset, 8);
+
+        input2filter11 += __shfl_down_sync(0xffffffff, input2filter11, offset, 8);
+        input2filter12 += __shfl_down_sync(0xffffffff, input2filter12, offset, 8);
+        input2filter13 += __shfl_down_sync(0xffffffff, input2filter13, offset, 8);
+        input2filter14 += __shfl_down_sync(0xffffffff, input2filter14, offset, 8);
+        input2filter15 += __shfl_down_sync(0xffffffff, input2filter15, offset, 8);
+
+        input2filter16 += __shfl_down_sync(0xffffffff, input2filter16, offset, 8);
+        input2filter17 += __shfl_down_sync(0xffffffff, input2filter17, offset, 8);
+        input2filter18 += __shfl_down_sync(0xffffffff, input2filter18, offset, 8);
+        input2filter19 += __shfl_down_sync(0xffffffff, input2filter19, offset, 8);
+        input2filter20 += __shfl_down_sync(0xffffffff, input2filter20, offset, 8);
+
+        input3filter1 += __shfl_down_sync(0xffffffff, input3filter1, offset, 8);
+        input3filter2 += __shfl_down_sync(0xffffffff, input3filter2, offset, 8);
+        input3filter3 += __shfl_down_sync(0xffffffff, input3filter3, offset, 8);
+        input3filter4 += __shfl_down_sync(0xffffffff, input3filter4, offset, 8);
+        input3filter5 += __shfl_down_sync(0xffffffff, input3filter5, offset, 8);
+
+        input3filter6 += __shfl_down_sync(0xffffffff, input3filter6, offset, 8);
+        input3filter7 += __shfl_down_sync(0xffffffff, input3filter7, offset, 8);
+        input3filter8 += __shfl_down_sync(0xffffffff, input3filter8, offset, 8);
+        input3filter9 += __shfl_down_sync(0xffffffff, input3filter9, offset, 8);
+        input3filter10 += __shfl_down_sync(0xffffffff, input3filter10, offset, 8);
+
+        input3filter11 += __shfl_down_sync(0xffffffff, input3filter11, offset, 8);
+        input3filter12 += __shfl_down_sync(0xffffffff, input3filter12, offset, 8);
+        input3filter13 += __shfl_down_sync(0xffffffff, input3filter13, offset, 8);
+        input3filter14 += __shfl_down_sync(0xffffffff, input3filter14, offset, 8);
+        input3filter15 += __shfl_down_sync(0xffffffff, input3filter15, offset, 8);
+
+        input3filter16 += __shfl_down_sync(0xffffffff, input3filter16, offset, 8);
+        input3filter17 += __shfl_down_sync(0xffffffff, input3filter17, offset, 8);
+        input3filter18 += __shfl_down_sync(0xffffffff, input3filter18, offset, 8);
+        input3filter19 += __shfl_down_sync(0xffffffff, input3filter19, offset, 8);
+        input3filter20 += __shfl_down_sync(0xffffffff, input3filter20, offset, 8);
+
+        input4filter1 += __shfl_down_sync(0xffffffff, input4filter1, offset, 8);
+        input4filter2 += __shfl_down_sync(0xffffffff, input4filter2, offset, 8);
+        input4filter3 += __shfl_down_sync(0xffffffff, input4filter3, offset, 8);
+        input4filter4 += __shfl_down_sync(0xffffffff, input4filter4, offset, 8);
+        input4filter5 += __shfl_down_sync(0xffffffff, input4filter5, offset, 8);
+
+        input4filter6 += __shfl_down_sync(0xffffffff, input4filter6, offset, 8);
+        input4filter7 += __shfl_down_sync(0xffffffff, input4filter7, offset, 8);
+        input4filter8 += __shfl_down_sync(0xffffffff, input4filter8, offset, 8);
+        input4filter9 += __shfl_down_sync(0xffffffff, input4filter9, offset, 8);
+        input4filter10 += __shfl_down_sync(0xffffffff, input4filter10, offset, 8);
+
+        input4filter11 += __shfl_down_sync(0xffffffff, input4filter11, offset, 8);
+        input4filter12 += __shfl_down_sync(0xffffffff, input4filter12, offset, 8);
+        input4filter13 += __shfl_down_sync(0xffffffff, input4filter13, offset, 8);
+        input4filter14 += __shfl_down_sync(0xffffffff, input4filter14, offset, 8);
+        input4filter15 += __shfl_down_sync(0xffffffff, input4filter15, offset, 8);
+
+        input4filter16 += __shfl_down_sync(0xffffffff, input4filter16, offset, 8);
+        input4filter17 += __shfl_down_sync(0xffffffff, input4filter17, offset, 8);
+        input4filter18 += __shfl_down_sync(0xffffffff, input4filter18, offset, 8);
+        input4filter19 += __shfl_down_sync(0xffffffff, input4filter19, offset, 8);
+        input4filter20 += __shfl_down_sync(0xffffffff, input4filter20, offset, 8);
+
+        input5filter1 += __shfl_down_sync(0xffffffff, input5filter1, offset, 8);
+        input5filter2 += __shfl_down_sync(0xffffffff, input5filter2, offset, 8);
+        input5filter3 += __shfl_down_sync(0xffffffff, input5filter3, offset, 8);
+        input5filter4 += __shfl_down_sync(0xffffffff, input5filter4, offset, 8);
+        input5filter5 += __shfl_down_sync(0xffffffff, input5filter5, offset, 8);
+
+        input5filter6 += __shfl_down_sync(0xffffffff, input5filter6, offset, 8);
+        input5filter7 += __shfl_down_sync(0xffffffff, input5filter7, offset, 8);
+        input5filter8 += __shfl_down_sync(0xffffffff, input5filter8, offset, 8);
+        input5filter9 += __shfl_down_sync(0xffffffff, input5filter9, offset, 8);
+        input5filter10 += __shfl_down_sync(0xffffffff, input5filter10, offset, 8);
+
+        input5filter11 += __shfl_down_sync(0xffffffff, input5filter11, offset, 8);
+        input5filter12 += __shfl_down_sync(0xffffffff, input5filter12, offset, 8);
+        input5filter13 += __shfl_down_sync(0xffffffff, input5filter13, offset, 8);
+        input5filter14 += __shfl_down_sync(0xffffffff, input5filter14, offset, 8);
+        input5filter15 += __shfl_down_sync(0xffffffff, input5filter15, offset, 8);
+
+        input5filter16 += __shfl_down_sync(0xffffffff, input5filter16, offset, 8);
+        input5filter17 += __shfl_down_sync(0xffffffff, input5filter17, offset, 8);
+        input5filter18 += __shfl_down_sync(0xffffffff, input5filter18, offset, 8);
+        input5filter19 += __shfl_down_sync(0xffffffff, input5filter19, offset, 8);
+        input5filter20 += __shfl_down_sync(0xffffffff, input5filter20, offset, 8);
+
+        input6filter1 += __shfl_down_sync(0xffffffff, input6filter1, offset, 8);
+        input6filter2 += __shfl_down_sync(0xffffffff, input6filter2, offset, 8);
+        input6filter3 += __shfl_down_sync(0xffffffff, input6filter3, offset, 8);
+        input6filter4 += __shfl_down_sync(0xffffffff, input6filter4, offset, 8);
+        input6filter5 += __shfl_down_sync(0xffffffff, input6filter5, offset, 8);
+
+        input6filter6 += __shfl_down_sync(0xffffffff, input6filter6, offset, 8);
+        input6filter7 += __shfl_down_sync(0xffffffff, input6filter7, offset, 8);
+        input6filter8 += __shfl_down_sync(0xffffffff, input6filter8, offset, 8);
+        input6filter9 += __shfl_down_sync(0xffffffff, input6filter9, offset, 8);
+        input6filter10 += __shfl_down_sync(0xffffffff, input6filter10, offset, 8);
+
+        input6filter11 += __shfl_down_sync(0xffffffff, input6filter11, offset, 8);
+        input6filter12 += __shfl_down_sync(0xffffffff, input6filter12, offset, 8);
+        input6filter13 += __shfl_down_sync(0xffffffff, input6filter13, offset, 8);
+        input6filter14 += __shfl_down_sync(0xffffffff, input6filter14, offset, 8);
+        input6filter15 += __shfl_down_sync(0xffffffff, input6filter15, offset, 8);
+
+        input6filter16 += __shfl_down_sync(0xffffffff, input6filter16, offset, 8);
+        input6filter17 += __shfl_down_sync(0xffffffff, input6filter17, offset, 8);
+        input6filter18 += __shfl_down_sync(0xffffffff, input6filter18, offset, 8);
+        input6filter19 += __shfl_down_sync(0xffffffff, input6filter19, offset, 8);
+        input6filter20 += __shfl_down_sync(0xffffffff, input6filter20, offset, 8);
+
+        input7filter1 += __shfl_down_sync(0xffffffff, input7filter1, offset, 8);
+        input7filter2 += __shfl_down_sync(0xffffffff, input7filter2, offset, 8);
+        input7filter3 += __shfl_down_sync(0xffffffff, input7filter3, offset, 8);
+        input7filter4 += __shfl_down_sync(0xffffffff, input7filter4, offset, 8);
+        input7filter5 += __shfl_down_sync(0xffffffff, input7filter5, offset, 8);
+
+        input7filter6 += __shfl_down_sync(0xffffffff, input7filter6, offset, 8);
+        input7filter7 += __shfl_down_sync(0xffffffff, input7filter7, offset, 8);
+        input7filter8 += __shfl_down_sync(0xffffffff, input7filter8, offset, 8);
+        input7filter9 += __shfl_down_sync(0xffffffff, input7filter9, offset, 8);
+        input7filter10 += __shfl_down_sync(0xffffffff, input7filter10, offset, 8);
+
+        input7filter11 += __shfl_down_sync(0xffffffff, input7filter11, offset, 8);
+        input7filter12 += __shfl_down_sync(0xffffffff, input7filter12, offset, 8);
+        input7filter13 += __shfl_down_sync(0xffffffff, input7filter13, offset, 8);
+        input7filter14 += __shfl_down_sync(0xffffffff, input7filter14, offset, 8);
+        input7filter15 += __shfl_down_sync(0xffffffff, input7filter15, offset, 8);
+
+        input7filter16 += __shfl_down_sync(0xffffffff, input7filter16, offset, 8);
+        input7filter17 += __shfl_down_sync(0xffffffff, input7filter17, offset, 8);
+        input7filter18 += __shfl_down_sync(0xffffffff, input7filter18, offset, 8);
+        input7filter19 += __shfl_down_sync(0xffffffff, input7filter19, offset, 8);
+        input7filter20 += __shfl_down_sync(0xffffffff, input7filter20, offset, 8);
+    }
+
+    // Store output
+    int blockWriteOutputStartIdx = (blockIdx.x % 2) * outputWidth * outputHeight * (outputChannel / 2);
+
+    if(laneID % 8 == 0) {
+        output[blockWriteOutputStartIdx + 0 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter1;
+        output[blockWriteOutputStartIdx + 0 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter1;
+        output[blockWriteOutputStartIdx + 0 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter1;
+        output[blockWriteOutputStartIdx + 0 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter1;
+        output[blockWriteOutputStartIdx + 0 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter1;
+        output[blockWriteOutputStartIdx + 0 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter1;
+        output[blockWriteOutputStartIdx + 0 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter1;
+
+        output[blockWriteOutputStartIdx + 1 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter2;
+        output[blockWriteOutputStartIdx + 1 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter2;
+        output[blockWriteOutputStartIdx + 1 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter2;
+        output[blockWriteOutputStartIdx + 1 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter2;
+        output[blockWriteOutputStartIdx + 1 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter2;
+        output[blockWriteOutputStartIdx + 1 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter2;
+        output[blockWriteOutputStartIdx + 1 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter2;
+
+        output[blockWriteOutputStartIdx + 2 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter3;
+        output[blockWriteOutputStartIdx + 2 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter3;
+        output[blockWriteOutputStartIdx + 2 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter3;
+        output[blockWriteOutputStartIdx + 2 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter3;
+        output[blockWriteOutputStartIdx + 2 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter3;
+        output[blockWriteOutputStartIdx + 2 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter3;
+        output[blockWriteOutputStartIdx + 2 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter3;
+
+        output[blockWriteOutputStartIdx + 3 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter4;
+        output[blockWriteOutputStartIdx + 3 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter4;
+        output[blockWriteOutputStartIdx + 3 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter4;
+        output[blockWriteOutputStartIdx + 3 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter4;
+        output[blockWriteOutputStartIdx + 3 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter4;
+        output[blockWriteOutputStartIdx + 3 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter4;
+        output[blockWriteOutputStartIdx + 3 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter4;
+
+        output[blockWriteOutputStartIdx + 4 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter5;
+        output[blockWriteOutputStartIdx + 4 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter5;
+        output[blockWriteOutputStartIdx + 4 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter5;
+        output[blockWriteOutputStartIdx + 4 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter5;
+        output[blockWriteOutputStartIdx + 4 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter5;
+        output[blockWriteOutputStartIdx + 4 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter5;
+        output[blockWriteOutputStartIdx + 4 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter5;
+
+        output[blockWriteOutputStartIdx + 5 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter6;
+        output[blockWriteOutputStartIdx + 5 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter6;
+        output[blockWriteOutputStartIdx + 5 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter6;
+        output[blockWriteOutputStartIdx + 5 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter6;
+        output[blockWriteOutputStartIdx + 5 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter6;
+        output[blockWriteOutputStartIdx + 5 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter6;
+        output[blockWriteOutputStartIdx + 5 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter6;
+
+        output[blockWriteOutputStartIdx + 6 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter7;
+        output[blockWriteOutputStartIdx + 6 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter7;
+        output[blockWriteOutputStartIdx + 6 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter7;
+        output[blockWriteOutputStartIdx + 6 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter7;
+        output[blockWriteOutputStartIdx + 6 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter7;
+        output[blockWriteOutputStartIdx + 6 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter7;
+        output[blockWriteOutputStartIdx + 6 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter7;
+
+        output[blockWriteOutputStartIdx + 7 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter8;
+        output[blockWriteOutputStartIdx + 7 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter8;
+        output[blockWriteOutputStartIdx + 7 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter8;
+        output[blockWriteOutputStartIdx + 7 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter8;
+        output[blockWriteOutputStartIdx + 7 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter8;
+        output[blockWriteOutputStartIdx + 7 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter8;
+        output[blockWriteOutputStartIdx + 7 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter8;
+
+        output[blockWriteOutputStartIdx + 8 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter9;
+        output[blockWriteOutputStartIdx + 8 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter9;
+        output[blockWriteOutputStartIdx + 8 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter9;
+        output[blockWriteOutputStartIdx + 8 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter9;
+        output[blockWriteOutputStartIdx + 8 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter9;
+        output[blockWriteOutputStartIdx + 8 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter9;
+        output[blockWriteOutputStartIdx + 8 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter9;
+
+        output[blockWriteOutputStartIdx + 9 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter10;
+        output[blockWriteOutputStartIdx + 9 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter10;
+        output[blockWriteOutputStartIdx + 9 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter10;
+        output[blockWriteOutputStartIdx + 9 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter10;
+        output[blockWriteOutputStartIdx + 9 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter10;
+        output[blockWriteOutputStartIdx + 9 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter10;
+        output[blockWriteOutputStartIdx + 9 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter10;
+
+        output[blockWriteOutputStartIdx + 10 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter11;
+        output[blockWriteOutputStartIdx + 10 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter11;
+        output[blockWriteOutputStartIdx + 10 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter11;
+        output[blockWriteOutputStartIdx + 10 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter11;
+        output[blockWriteOutputStartIdx + 10 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter11;
+        output[blockWriteOutputStartIdx + 10 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter11;
+        output[blockWriteOutputStartIdx + 10 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter11;
+
+        output[blockWriteOutputStartIdx + 11 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter12;
+        output[blockWriteOutputStartIdx + 11 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter12;
+        output[blockWriteOutputStartIdx + 11 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter12;
+        output[blockWriteOutputStartIdx + 11 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter12;
+        output[blockWriteOutputStartIdx + 11 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter12;
+        output[blockWriteOutputStartIdx + 11 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter12;
+        output[blockWriteOutputStartIdx + 11 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter12;
+
+        output[blockWriteOutputStartIdx + 12 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter13;
+        output[blockWriteOutputStartIdx + 12 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter13;
+        output[blockWriteOutputStartIdx + 12 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter13;
+        output[blockWriteOutputStartIdx + 12 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter13;
+        output[blockWriteOutputStartIdx + 12 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter13;
+        output[blockWriteOutputStartIdx + 12 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter13;
+        output[blockWriteOutputStartIdx + 12 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter13;
+
+        output[blockWriteOutputStartIdx + 13 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter14;
+        output[blockWriteOutputStartIdx + 13 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter14;
+        output[blockWriteOutputStartIdx + 13 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter14;
+        output[blockWriteOutputStartIdx + 13 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter14;
+        output[blockWriteOutputStartIdx + 13 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter14;
+        output[blockWriteOutputStartIdx + 13 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter14;
+        output[blockWriteOutputStartIdx + 13 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter14;
+
+        output[blockWriteOutputStartIdx + 14 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter15;
+        output[blockWriteOutputStartIdx + 14 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter15;
+        output[blockWriteOutputStartIdx + 14 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter15;
+        output[blockWriteOutputStartIdx + 14 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter15;
+        output[blockWriteOutputStartIdx + 14 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter15;
+        output[blockWriteOutputStartIdx + 14 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter15;
+        output[blockWriteOutputStartIdx + 14 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter15;
+
+        output[blockWriteOutputStartIdx + 15 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter16;
+        output[blockWriteOutputStartIdx + 15 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter16;
+        output[blockWriteOutputStartIdx + 15 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter16;
+        output[blockWriteOutputStartIdx + 15 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter16;
+        output[blockWriteOutputStartIdx + 15 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter16;
+        output[blockWriteOutputStartIdx + 15 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter16;
+        output[blockWriteOutputStartIdx + 15 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter16;
+
+        output[blockWriteOutputStartIdx + 16 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter17;
+        output[blockWriteOutputStartIdx + 16 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter17;
+        output[blockWriteOutputStartIdx + 16 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter17;
+        output[blockWriteOutputStartIdx + 16 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter17;
+        output[blockWriteOutputStartIdx + 16 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter17;
+        output[blockWriteOutputStartIdx + 16 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter17;
+        output[blockWriteOutputStartIdx + 16 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter17;
+
+        output[blockWriteOutputStartIdx + 17 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter18;
+        output[blockWriteOutputStartIdx + 17 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter18;
+        output[blockWriteOutputStartIdx + 17 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter18;
+        output[blockWriteOutputStartIdx + 17 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter18;
+        output[blockWriteOutputStartIdx + 17 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter18;
+        output[blockWriteOutputStartIdx + 17 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter18;
+        output[blockWriteOutputStartIdx + 17 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter18;
+
+        output[blockWriteOutputStartIdx + 18 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter19;
+        output[blockWriteOutputStartIdx + 18 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter19;
+        output[blockWriteOutputStartIdx + 18 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter19;
+        output[blockWriteOutputStartIdx + 18 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter19;
+        output[blockWriteOutputStartIdx + 18 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter19;
+        output[blockWriteOutputStartIdx + 18 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter19;
+        output[blockWriteOutputStartIdx + 18 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter19;
+
+        output[blockWriteOutputStartIdx + 19 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 0] = input1filter20;
+        output[blockWriteOutputStartIdx + 19 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 1] = input2filter20;
+        output[blockWriteOutputStartIdx + 19 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 2] = input3filter20;
+        output[blockWriteOutputStartIdx + 19 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 3] = input4filter20;
+        output[blockWriteOutputStartIdx + 19 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 4] = input5filter20;
+        output[blockWriteOutputStartIdx + 19 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 5] = input6filter20;
+        output[blockWriteOutputStartIdx + 19 * 4 * outputHeight * outputWidth + warpID + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter20;
+    }
 }
 
 // ===========================================================================
@@ -2411,7 +2745,7 @@ int main(int argc, char* argv[]) {
         cudaEventRecord(start);
 
         // Convolution
-        dim3 gridSize(outputBatchNumber * outputHeight * outputWidth * outputChannel / (7 * 7 * 32));
+        dim3 gridSize(outputBatchNumber * outputHeight * outputWidth * outputChannel / (7 * 7 * 80));
         dim3 blockSize(7 * 32);
         InputBatch_128_Input_7x7_InChannel_576_OutChannel_160<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
             inputBatchNumber, inputChannel, inputHeight, inputWidth,
