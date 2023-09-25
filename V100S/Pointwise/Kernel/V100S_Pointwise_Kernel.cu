@@ -954,13 +954,17 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
     int filterOutChannel, int filterInChannel, int filterHeight, int filterWidth,
     int outputBatchNumber, int outputChannel, int outputHeight, int outputWidth) {
     
+    // warpNum(7) warps in total, each warp uses warpH (7) * Cnum (8) input data each time
     __shared__ float inputSharedBuffer1[7 * 7 * 8];
     __shared__ float inputSharedBuffer2[7 * 7 * 8];
 
-    __shared__ float filterSharedBuffer1[7 * 80];
-    __shared__ float filterSharedBuffer2[7 * 80];
+    // each block generates WarpW (80) output channels. every time, a block uses Cnum (8) channels in a filter
+    __shared__ float filterSharedBuffer1[8 * 80];
+    __shared__ float filterSharedBuffer2[8 * 80];
 
-    // to hold loaded operands temp
+    // to hold loaded operands temp.
+    // number of input temp = warpH (7)
+    // number of filter temp = WarpW / (warpSize / Cnum) = 80 / (32 / 8)
     float inputTemp1 = 0, inputTemp2 = 0, inputTemp3 = 0, inputTemp4 = 0, inputTemp5 = 0, inputTemp6 = 0, inputTemp7 = 0;
     float filterTemp1 = 0, filterTemp2 = 0, filterTemp3 = 0, filterTemp4 = 0, filterTemp5 = 0;
     float filterTemp6 = 0, filterTemp7 = 0, filterTemp8 = 0, filterTemp9 = 0, filterTemp10 = 0;
@@ -968,6 +972,7 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
     float filterTemp16 = 0, filterTemp17 = 0, filterTemp18 = 0, filterTemp19 = 0, filterTemp20 = 0;
 
     // to hold operands
+    // same number as temp registers
     float inputOperand1 = 0, inputOperand2 = 0, inputOperand3 = 0, inputOperand4 = 0, inputOperand5 = 0, inputOperand6 = 0, inputOperand7 = 0;
     float filterOperand1 = 0, filterOperand2 = 0, filterOperand3 = 0, filterOperand4 = 0, filterOperand5 = 0;
     float filterOperand6 = 0, filterOperand7 = 0, filterOperand8 = 0, filterOperand9 = 0, filterOperand10 = 0;
@@ -975,6 +980,7 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
     float filterOperand16 = 0, filterOperand17 = 0, filterOperand18 = 0, filterOperand19 = 0, filterOperand20 = 0;
 
     // to hold intermediate result
+    // number of input temp * number of filter temp = 7 * 20
     float input1filter1 = 0, input1filter2 = 0, input1filter3 = 0, input1filter4 = 0, input1filter5 = 0; 
     float input1filter6 = 0, input1filter7 = 0, input1filter8 = 0, input1filter9 = 0, input1filter10 = 0;
     float input1filter11 = 0, input1filter12 = 0, input1filter13 = 0, input1filter14 = 0, input1filter15 = 0;
@@ -1010,25 +1016,23 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
     float input7filter11 = 0, input7filter12 = 0, input7filter13 = 0, input7filter14 = 0, input7filter15 = 0;
     float input7filter16 = 0, input7filter17 = 0, input7filter18 = 0, input7filter19 = 0, input7filter20 = 0;
 
-    int warpID = threadIdx.x / 32;    //each block contains 7 warps, warpID 0 - 6
-    int laneID = threadIdx.x % 32;
-    
-    // load Cnum channels data from input and filter, and store into shared buffer 1
+    int warpID = threadIdx.x / 32;    // each block contains 7 warps, warpID 0 - 6
+    int laneID = threadIdx.x % 32;    // each warp contains 32 threads, laneID 0 - 31
+
+    // load Cnum (8) channels of data from input (7 * 7 * 8) and filter (80 * 8), and store into shared buffer 1
     // input
     int blockLoadInputStartIdx = (blockIdx.x / 2) * inputChannel * inputHeight * inputWidth;
-    int inputLoadSrcIdx = blockLoadInputStartIdx + (threadIdx.x / (inputHeight * inputWidth)) * inputHeight * inputWidth + (threadIdx.x / inputWidth) * inputWidth + (threadIdx.x % inputWidth);
-    inputSharedBuffer1[threadIdx.x + 32 * 7 * 0] = input[inputLoadSrcIdx + 32 * 7 * 0];
-    if(threadIdx.x < 7 * 24){
-        inputSharedBuffer1[threadIdx.x + 32 * 7 * 1] = input[inputLoadSrcIdx + 32 * 7 * 1];
+    inputSharedBuffer1[threadIdx.x + 32 * 7 * 0] = input[blockLoadInputStartIdx + threadIdx.x + 32 * 7 * 0];
+    if(threadIdx.x < (7 * 7 * 8 - 32 * 7)) {
+        inputSharedBuffer1[threadIdx.x + 32 * 7 * 1] = input[blockLoadInputStartIdx + threadIdx.x + 32 * 7 * 1];
     }
     
     // filter
     int blockLoadFilterStartIdx = (blockIdx.x % 2) * inputChannel * (outputChannel / 2);
-    int filterLoadSrcIdx = blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8);
-    filterSharedBuffer1[threadIdx.x + 32 * 7 * 0] = filter[filterLoadSrcIdx + 28 * 576 * 0];    // 28 output channels
-    filterSharedBuffer1[threadIdx.x + 32 * 7 * 1] = filter[filterLoadSrcIdx + 28 * 576 * 1];    // 56 output channels
-    if(threadIdx.x < 7 * 24) {
-        filterSharedBuffer1[threadIdx.x + 32 * 7 * 2] = filter[filterLoadSrcIdx + 28 * 576 * 2]; // last 24 output channels
+    filterSharedBuffer1[threadIdx.x + 32 * 7 * 0] = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * 7 * inputChannel * 0];    // 28 output channels
+    filterSharedBuffer1[threadIdx.x + 32 * 7 * 1] = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * 7 * inputChannel * 1];    // 56 output channels
+    if(threadIdx.x < (8 * 80 - 32 * 7 * 2)) {
+        filterSharedBuffer1[threadIdx.x + 32 * 7 * 2] = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * 7 * inputChannel * 2]; // last 24 output channels
     }
 
     __syncthreads();
@@ -1044,29 +1048,29 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
         inputTemp5 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 4];
         inputTemp6 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 5];
         inputTemp7 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 6];
-
+        
         blockLoadFilterStartIdx += 8;
-        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 0];
-        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 1];
-        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 2];
-        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 3];
-        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 4];
-        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 5];
-        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 6];
-        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 7];
-        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 8];
-        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 9];
+        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 0];
+        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 1];
+        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 2];
+        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 3];
+        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 4];
+        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 5];
+        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 6];
+        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 7];
+        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 8];
+        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 9];
 
-        filterTemp11 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 10];
-        filterTemp12 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 11];
-        filterTemp13 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 12];
-        filterTemp14 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 13];
-        filterTemp15 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 14];
-        filterTemp16 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 15];
-        filterTemp17 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 16];
-        filterTemp18 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 17];
-        filterTemp19 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 18];
-        filterTemp20 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 19];
+        filterTemp11 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 10];
+        filterTemp12 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 11];
+        filterTemp13 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 12];
+        filterTemp14 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 13];
+        filterTemp15 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 14];
+        filterTemp16 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 15];
+        filterTemp17 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 16];
+        filterTemp18 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 17];
+        filterTemp19 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 18];
+        filterTemp20 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 19];
 
         // Copy operands from shared buffer 1 into Operands Registers
         inputOperand1 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 0];
@@ -1077,29 +1081,29 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
         inputOperand6 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 5];
         inputOperand7 = inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 6];
 
-        filterOperand1 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0];
-        filterOperand2 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1];
-        filterOperand3 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2];
-        filterOperand4 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3];
-        filterOperand5 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4];
+        filterOperand1 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 0];
+        filterOperand2 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 1];
+        filterOperand3 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 2];
+        filterOperand4 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 3];
+        filterOperand5 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 4];
 
-        filterOperand6 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5];
-        filterOperand7 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6];
-        filterOperand8 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7];
-        filterOperand9 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8];
-        filterOperand10 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9];
+        filterOperand6 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 5];
+        filterOperand7 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 6];
+        filterOperand8 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 7];
+        filterOperand9 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 8];
+        filterOperand10 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 9];
 
-        filterOperand11 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10];
-        filterOperand12 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11];
-        filterOperand13 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12];
-        filterOperand14 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13];
-        filterOperand15 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14];
+        filterOperand11 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 10];
+        filterOperand12 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 11];
+        filterOperand13 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 12];
+        filterOperand14 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 13];
+        filterOperand15 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 14];
 
-        filterOperand16 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15];
-        filterOperand17 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16];
-        filterOperand18 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17];
-        filterOperand19 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18];
-        filterOperand20 = filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19];
+        filterOperand16 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 15];
+        filterOperand17 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 16];
+        filterOperand18 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 17];
+        filterOperand19 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 18];
+        filterOperand20 = filterSharedBuffer1[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 19];
 
         // Compute and Accumulate result in Result Registers
         input1filter1 += inputOperand1 * filterOperand1;
@@ -1271,37 +1275,41 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
         input7filter20 += inputOperand7 * filterOperand20;
 
         // Copy Temp Registers to shared buffer 2
-        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 0] = inputTemp1;
-        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 1] = inputTemp2;
-        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 2] = inputTemp3;
-        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 3] = inputTemp4;
-        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 4] = inputTemp5;
-        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 5] = inputTemp6;
-        inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 6] = inputTemp7;
+        if(threadIdx.x % 8 < 8){
+            inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 0] = inputTemp1;
+            inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 1] = inputTemp2;
+            inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 2] = inputTemp3;
+            inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 3] = inputTemp4;
+            inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 4] = inputTemp5;
+            inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 5] = inputTemp6;
+            inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 6] = inputTemp7;
+        }
 
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0] = filterTemp1;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1] = filterTemp2;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2] = filterTemp3;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3] = filterTemp4;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4] = filterTemp5;
+        if(threadIdx.x < 32) {
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0] = filterTemp1;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1] = filterTemp2;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2] = filterTemp3;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3] = filterTemp4;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4] = filterTemp5;
 
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5] = filterTemp6;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6] = filterTemp7;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7] = filterTemp8;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8] = filterTemp9;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9] = filterTemp10;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5] = filterTemp6;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6] = filterTemp7;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7] = filterTemp8;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8] = filterTemp9;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9] = filterTemp10;
 
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10] = filterTemp11;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11] = filterTemp12;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12] = filterTemp13;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13] = filterTemp14;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14] = filterTemp15;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10] = filterTemp11;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11] = filterTemp12;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12] = filterTemp13;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13] = filterTemp14;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14] = filterTemp15;
 
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15] = filterTemp16;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16] = filterTemp17;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17] = filterTemp18;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18] = filterTemp19;
-        filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19] = filterTemp20;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15] = filterTemp16;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16] = filterTemp17;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17] = filterTemp18;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18] = filterTemp19;
+            filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19] = filterTemp20;
+        }
 
         __syncthreads();
 
@@ -1315,29 +1323,29 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
         inputTemp5 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 4];
         inputTemp6 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 5];
         inputTemp7 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 8) * 7 * 7 + 6];
-
+        
         blockLoadFilterStartIdx += 8;
-        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 0];
-        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 1];
-        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 2];
-        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 3];
-        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 4];
-        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 5];
-        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 6];
-        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 7];
-        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 8];
-        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 9];
+        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 0];
+        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 1];
+        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 2];
+        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 3];
+        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 4];
+        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 5];
+        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 6];
+        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 7];
+        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 8];
+        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 9];
 
-        filterTemp11 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 10];
-        filterTemp12 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 11];
-        filterTemp13 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 12];
-        filterTemp14 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 13];
-        filterTemp15 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 14];
-        filterTemp16 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 15];
-        filterTemp17 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 16];
-        filterTemp18 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 17];
-        filterTemp19 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 18];
-        filterTemp20 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + 4 * 576 * 19];
+        filterTemp11 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 10];
+        filterTemp12 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 11];
+        filterTemp13 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 12];
+        filterTemp14 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 13];
+        filterTemp15 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 14];
+        filterTemp16 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 15];
+        filterTemp17 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 16];
+        filterTemp18 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 17];
+        filterTemp19 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 18];
+        filterTemp20 = filter[blockLoadFilterStartIdx + (threadIdx.x / 8) * inputChannel + (threadIdx.x % 8) + (32 / 8) * inputChannel * 19];
 
         // Copy operands from shared buffer 2 into Operands Registers
         inputOperand1 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 0];
@@ -1348,29 +1356,29 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
         inputOperand6 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 5];
         inputOperand7 = inputSharedBuffer2[warpID * 7 + (laneID % 8) * 7 * 7 + 6];
 
-        filterOperand1 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0];
-        filterOperand2 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1];
-        filterOperand3 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2];
-        filterOperand4 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3];
-        filterOperand5 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4];
+        filterOperand1 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 0];
+        filterOperand2 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 1];
+        filterOperand3 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 2];
+        filterOperand4 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 3];
+        filterOperand5 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 4];
 
-        filterOperand6 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5];
-        filterOperand7 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6];
-        filterOperand8 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7];
-        filterOperand9 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8];
-        filterOperand10 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9];
+        filterOperand6 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 5];
+        filterOperand7 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 6];
+        filterOperand8 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 7];
+        filterOperand9 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 8];
+        filterOperand10 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 9];
 
-        filterOperand11 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10];
-        filterOperand12 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11];
-        filterOperand13 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12];
-        filterOperand14 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13];
-        filterOperand15 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14];
+        filterOperand11 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 10];
+        filterOperand12 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 11];
+        filterOperand13 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 12];
+        filterOperand14 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 13];
+        filterOperand15 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 14];
 
-        filterOperand16 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15];
-        filterOperand17 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16];
-        filterOperand18 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17];
-        filterOperand19 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18];
-        filterOperand20 = filterSharedBuffer2[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19];
+        filterOperand16 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 15];
+        filterOperand17 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 16];
+        filterOperand18 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 17];
+        filterOperand19 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 18];
+        filterOperand20 = filterSharedBuffer2[(laneID / 8) * 8 + laneID % 8 + 4 * 8 * 19];  
 
         // Compute and Accumulate result in Result Registers
         input1filter1 += inputOperand1 * filterOperand1;
@@ -1541,38 +1549,41 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
         input7filter19 += inputOperand7 * filterOperand19;
         input7filter20 += inputOperand7 * filterOperand20;
 
-        // Copy Temp Registers to shared buffer 2
-        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 0] = inputTemp1;
-        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 1] = inputTemp2;
-        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 2] = inputTemp3;
-        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 3] = inputTemp4;
-        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 4] = inputTemp5;
-        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 5] = inputTemp6;
-        inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 6] = inputTemp7;
+        // Copy Temp Registers to shared buffer 1
+        if(threadIdx.x % 8 < 8){
+            inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 0] = inputTemp1;
+            inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 1] = inputTemp2;
+            inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 2] = inputTemp3;
+            inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 3] = inputTemp4;
+            inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 4] = inputTemp5;
+            inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 5] = inputTemp6;
+            inputSharedBuffer1[warpID * 7 + (laneID % 8) * 7 * 7 + 6] = inputTemp7;
+        }
+        if(threadIdx.x < 32) {
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0] = filterTemp1;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1] = filterTemp2;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2] = filterTemp3;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3] = filterTemp4;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4] = filterTemp5;
 
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 0] = filterTemp1;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 1] = filterTemp2;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 2] = filterTemp3;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 3] = filterTemp4;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 4] = filterTemp5;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5] = filterTemp6;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6] = filterTemp7;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7] = filterTemp8;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8] = filterTemp9;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9] = filterTemp10;
 
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 5] = filterTemp6;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 6] = filterTemp7;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 7] = filterTemp8;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 8] = filterTemp9;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 9] = filterTemp10;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10] = filterTemp11;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11] = filterTemp12;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12] = filterTemp13;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13] = filterTemp14;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14] = filterTemp15;
 
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 10] = filterTemp11;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 11] = filterTemp12;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 12] = filterTemp13;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 13] = filterTemp14;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 14] = filterTemp15;
-
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15] = filterTemp16;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16] = filterTemp17;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17] = filterTemp18;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18] = filterTemp19;
-        filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19] = filterTemp20;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 15] = filterTemp16;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 16] = filterTemp17;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 17] = filterTemp18;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 18] = filterTemp19;
+            filterSharedBuffer1[(threadIdx.x / 8) * 8 + threadIdx.x % 8 + 4 * 8 * 19] = filterTemp20;
+        }
 
         __syncthreads();
     }
@@ -2688,12 +2699,28 @@ int main(int argc, char* argv[]) {
     // Input Size 7 x 7, Input Channel 576, Output Channel 160
     // ===========================================================================
     if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
-        cudaEventRecord(start);
+        /*cudaEventRecord(start);
 
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
         InputBatch_1_Input_7x7_InChannel_576_OutChannel_160<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
+            inputBatchNumber, inputChannel, inputHeight, inputWidth,
+            filterOutChannel, filterInChannel, filterHeight, filterWidth,
+            outputBatchNumber, outputChannel, outputHeight, outputWidth);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&elapsedTime, start, stop);
+        kernelTime = elapsedTime;
+        printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
+        inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
+        */
+        cudaEventRecord(start);
+
+        // Convolution
+        dim3 gridSize(outputBatchNumber * outputHeight * outputWidth * outputChannel / (7 * 7 * 80));
+        dim3 blockSize(7 * 32);
+        InputBatch_128_Input_7x7_InChannel_576_OutChannel_160<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
             inputBatchNumber, inputChannel, inputHeight, inputWidth,
             filterOutChannel, filterInChannel, filterHeight, filterWidth,
             outputBatchNumber, outputChannel, outputHeight, outputWidth);
