@@ -15,7 +15,7 @@
 
 using namespace std;
 
-//CSV文件头,保存路径
+//CSV header and path
 #ifdef AMD_PLATFORM
 #define CSVPATH "DCU_Pointwise_result.csv"
 // vector<string> csvHeader={"Input Batch","Input Channel","Height","Filter Size","Stride","DCU Kernel(ms)","HipDNN(ms)"};
@@ -66,7 +66,7 @@ void writeCsv(int batchnumber, int channel, int height, int filterheight, int st
 
     if (!fs)
     {
-        //创建文件
+        //create file
         ofstream fout(CSVPATH, ios::app);
         if (fout)
         {
@@ -929,6 +929,7 @@ __global__ void InputBatch_16_Input_7x7_InChannel_576_OutChannel_160(const float
 Pointwise Convolution Kernel
 InputBatch_128_Input_7x7_InChannel_576_OutChannel_160
 
+Implementation 1. First Correct Large Kernel Based on The Paper
 Grid:
     gridDim.x = (128 * 160 * 7 * 7) / (7 * 7 * 80);
 Block:
@@ -938,17 +939,15 @@ WarpH = 7
 WarpW = 80
 Cnum = 8
 
-One thread block contains 7 warps, 7 * 32 = 224 threads
+One thread block contains 7 warps, 7 * 32 = 224 threads. 
 Each thread block is responsible for generating 7 * 7 * 80 output data.
-Because each output data is 7 * 7 * 160, two thread blocks generate one output data together.
+Each warp is responsible for generating 7 * 80 output data.
 
 V100S: 128 576 7 160
-Kernel: ms
-cuDNN: ms
+Kernel: 0.456832 ms
+cuDNN: 0.195808 ms
 */
-
-// On DCU, use this signature: __global__ __launch_bounds__(1024) void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160
-// On GPU, use this signature: __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160
+/*
 __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const float* input, const float* filter, float* output,
     int inputBatchNumber, int inputChannel, int inputHeight, int inputWidth,
     int filterOutChannel, int filterInChannel, int filterHeight, int filterWidth,
@@ -1927,6 +1926,589 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const floa
         output[blockWriteOutputStartIdx + 19 * 4 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 8) * outputHeight * outputWidth + 6] = input7filter20;
     }
 }
+*/
+
+/*
+Pointwise Convolution Kernel
+InputBatch_128_Input_7x7_InChannel_576_OutChannel_160
+
+Implementation 2.
+Grid:
+    gridDim.x = (128 * 160 * 7 * 7) / (7 * 7 * 80);
+Block:
+    blockDim.x = 32 * 7;
+
+warpNum = 7
+WarpH = 7
+WarpW = 80
+Cnum = 4
+
+One thread block contains 7 warps, 7 * 32 = 224 threads. 
+Each thread block is responsible for generating 7 * 7 * 80 output data.
+Each warp is responsible for generating 7 * 80 output data.
+
+V100S: 128 576 7 160
+Kernel:  ms
+cuDNN:  ms
+*/
+/*
+__global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160(const float* input, const float* filter, float* output,
+    int inputBatchNumber, int inputChannel, int inputHeight, int inputWidth,
+    int filterOutChannel, int filterInChannel, int filterHeight, int filterWidth,
+    int outputBatchNumber, int outputChannel, int outputHeight, int outputWidth) {
+    
+    // warpNum(7) warps in total, each warp uses warpH (7) * Cnum (8) input data each time
+    __shared__ float inputSharedBuffer1[7 * 7 * 4];
+    __shared__ float inputSharedBuffer2[7 * 7 * 4];
+
+    // each block generates WarpW (80) output channels. every time, a block uses Cnum (4) channels in a filter
+    __shared__ float filterSharedBuffer1[4 * 80];
+    __shared__ float filterSharedBuffer2[4 * 80];
+
+    // to hold loaded operands temp.
+    // number of input temp = warpH (7)
+    // number of filter temp = WarpW / (warpSize / Cnum) = 80 / (32 / 4)
+    float inputTemp1 = 0, inputTemp2 = 0, inputTemp3 = 0, inputTemp4 = 0, inputTemp5 = 0, inputTemp6 = 0, inputTemp7 = 0;
+    float filterTemp1 = 0, filterTemp2 = 0, filterTemp3 = 0, filterTemp4 = 0, filterTemp5 = 0;
+    float filterTemp6 = 0, filterTemp7 = 0, filterTemp8 = 0, filterTemp9 = 0, filterTemp10 = 0;
+
+    // to hold operands
+    // same number as temp registers
+    float inputOperand1 = 0, inputOperand2 = 0, inputOperand3 = 0, inputOperand4 = 0, inputOperand5 = 0, inputOperand6 = 0, inputOperand7 = 0;
+    float filterOperand1 = 0, filterOperand2 = 0, filterOperand3 = 0, filterOperand4 = 0, filterOperand5 = 0;
+    float filterOperand6 = 0, filterOperand7 = 0, filterOperand8 = 0, filterOperand9 = 0, filterOperand10 = 0;
+    
+    // to hold intermediate result
+    // number of input temp * number of filter temp = 7 * 20
+    float input1filter1 = 0, input1filter2 = 0, input1filter3 = 0, input1filter4 = 0, input1filter5 = 0; 
+    float input1filter6 = 0, input1filter7 = 0, input1filter8 = 0, input1filter9 = 0, input1filter10 = 0;
+
+    float input2filter1 = 0, input2filter2 = 0, input2filter3 = 0, input2filter4 = 0, input2filter5 = 0;
+    float input2filter6 = 0, input2filter7 = 0, input2filter8 = 0, input2filter9 = 0, input2filter10 = 0;
+
+    float input3filter1 = 0, input3filter2 = 0, input3filter3 = 0, input3filter4 = 0, input3filter5 = 0;
+    float input3filter6 = 0, input3filter7 = 0, input3filter8 = 0, input3filter9 = 0, input3filter10 = 0;
+
+    float input4filter1 = 0, input4filter2 = 0, input4filter3 = 0, input4filter4 = 0, input4filter5 = 0;
+    float input4filter6 = 0, input4filter7 = 0, input4filter8 = 0, input4filter9 = 0, input4filter10 = 0;
+
+    float input5filter1 = 0, input5filter2 = 0, input5filter3 = 0, input5filter4 = 0, input5filter5 = 0;
+    float input5filter6 = 0, input5filter7 = 0, input5filter8 = 0, input5filter9 = 0, input5filter10 = 0;
+
+    float input6filter1 = 0, input6filter2 = 0, input6filter3 = 0, input6filter4 = 0, input6filter5 = 0;
+    float input6filter6 = 0, input6filter7 = 0, input6filter8 = 0, input6filter9 = 0, input6filter10 = 0;
+
+    float input7filter1 = 0, input7filter2 = 0, input7filter3 = 0, input7filter4 = 0, input7filter5 = 0;
+    float input7filter6 = 0, input7filter7 = 0, input7filter8 = 0, input7filter9 = 0, input7filter10 = 0;
+
+    int warpID = threadIdx.x / 32;    // each block contains 7 warps, warpID 0 - 6
+    int laneID = threadIdx.x % 32;    // each warp contains 32 threads, laneID 0 - 31
+
+    // load Cnum (4) channels of data from input (7 * 7 * 4) and filter (80 * 4), and store into shared buffer 1
+    // input
+    int blockLoadInputStartIdx = (blockIdx.x / 2) * inputChannel * inputHeight * inputWidth;
+    if(threadIdx.x < 7 * 7 * 4) {
+        inputSharedBuffer1[threadIdx.x] = input[blockLoadInputStartIdx + threadIdx.x];
+    }
+
+    // filter
+    int blockLoadFilterStartIdx = (blockIdx.x % 2) * inputChannel * (outputChannel / 2);
+    filterSharedBuffer1[threadIdx.x + 32 * 7 * 0] = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * 7 * inputChannel * 0];       // 56 channels
+    if(threadIdx.x < (4 * 80 - 32 * 7)){
+        filterSharedBuffer1[threadIdx.x + 32 * 7 * 1] = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * 7 * inputChannel * 1];   // 24 channels
+    }
+    __syncthreads();
+    
+    // For loop begins
+    for(int i = 0; i < inputChannel / (2 * 4); i++) {
+        // load next group of Cnum channels
+        blockLoadInputStartIdx += 7 * 7 * 4;
+        inputTemp1 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 0];
+        inputTemp2 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 1];
+        inputTemp3 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 2];
+        inputTemp4 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 3];
+        inputTemp5 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 4];
+        inputTemp6 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 5];
+        inputTemp7 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 6];
+        
+        blockLoadFilterStartIdx += 4;
+        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 0];
+        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 1];
+        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 2];
+        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 3];
+        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 4];
+        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 5];
+        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 6];
+        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 7];
+        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 8];
+        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 9];
+
+        // Copy operands from shared buffer 1 into Operands Registers
+        inputOperand1 = inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 0];
+        inputOperand2 = inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 1];
+        inputOperand3 = inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 2];
+        inputOperand4 = inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 3];
+        inputOperand5 = inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 4];
+        inputOperand6 = inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 5];
+        inputOperand7 = inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 6];
+
+        filterOperand1 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 0];
+        filterOperand2 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 1];
+        filterOperand3 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 2];
+        filterOperand4 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 3];
+        filterOperand5 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 4];
+
+        filterOperand6 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 5];
+        filterOperand7 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 6];
+        filterOperand8 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 7];
+        filterOperand9 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 8];
+        filterOperand10 = filterSharedBuffer1[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 9];
+
+        // Compute and Accumulate result in Result Registers
+        input1filter1 += inputOperand1 * filterOperand1;
+        input1filter2 += inputOperand1 * filterOperand2;
+        input1filter3 += inputOperand1 * filterOperand3;
+        input1filter4 += inputOperand1 * filterOperand4;
+        input1filter5 += inputOperand1 * filterOperand5;
+
+        input1filter6 += inputOperand1 * filterOperand6;
+        input1filter7 += inputOperand1 * filterOperand7;
+        input1filter8 += inputOperand1 * filterOperand8;
+        input1filter9 += inputOperand1 * filterOperand9;
+        input1filter10 += inputOperand1 * filterOperand10;
+
+        input2filter1 += inputOperand2 * filterOperand1;
+        input2filter2 += inputOperand2 * filterOperand2;
+        input2filter3 += inputOperand2 * filterOperand3;
+        input2filter4 += inputOperand2 * filterOperand4;
+        input2filter5 += inputOperand2 * filterOperand5;
+
+        input2filter6 += inputOperand2 * filterOperand6;
+        input2filter7 += inputOperand2 * filterOperand7;
+        input2filter8 += inputOperand2 * filterOperand8;
+        input2filter9 += inputOperand2 * filterOperand9;
+        input2filter10 += inputOperand2 * filterOperand10;
+
+        input3filter1 += inputOperand3 * filterOperand1;
+        input3filter2 += inputOperand3 * filterOperand2;
+        input3filter3 += inputOperand3 * filterOperand3;
+        input3filter4 += inputOperand3 * filterOperand4;
+        input3filter5 += inputOperand3 * filterOperand5;
+
+        input3filter6 += inputOperand3 * filterOperand6;
+        input3filter7 += inputOperand3 * filterOperand7;
+        input3filter8 += inputOperand3 * filterOperand8;
+        input3filter9 += inputOperand3 * filterOperand9;
+        input3filter10 += inputOperand3 * filterOperand10;
+
+        input4filter1 += inputOperand4 * filterOperand1;
+        input4filter2 += inputOperand4 * filterOperand2;
+        input4filter3 += inputOperand4 * filterOperand3;
+        input4filter4 += inputOperand4 * filterOperand4;
+        input4filter5 += inputOperand4 * filterOperand5;
+
+        input4filter6 += inputOperand4 * filterOperand6;
+        input4filter7 += inputOperand4 * filterOperand7;
+        input4filter8 += inputOperand4 * filterOperand8;
+        input4filter9 += inputOperand4 * filterOperand9;
+        input4filter10 += inputOperand4 * filterOperand10;
+
+        input5filter1 += inputOperand5 * filterOperand1;
+        input5filter2 += inputOperand5 * filterOperand2;
+        input5filter3 += inputOperand5 * filterOperand3;
+        input5filter4 += inputOperand5 * filterOperand4;
+        input5filter5 += inputOperand5 * filterOperand5;
+
+        input5filter6 += inputOperand5 * filterOperand6;
+        input5filter7 += inputOperand5 * filterOperand7;
+        input5filter8 += inputOperand5 * filterOperand8;
+        input5filter9 += inputOperand5 * filterOperand9;
+        input5filter10 += inputOperand5 * filterOperand10;
+
+        input6filter1 += inputOperand6 * filterOperand1;
+        input6filter2 += inputOperand6 * filterOperand2;
+        input6filter3 += inputOperand6 * filterOperand3;
+        input6filter4 += inputOperand6 * filterOperand4;
+        input6filter5 += inputOperand6 * filterOperand5;
+
+        input6filter6 += inputOperand6 * filterOperand6;
+        input6filter7 += inputOperand6 * filterOperand7;
+        input6filter8 += inputOperand6 * filterOperand8;
+        input6filter9 += inputOperand6 * filterOperand9;
+        input6filter10 += inputOperand6 * filterOperand10;
+
+        input7filter1 += inputOperand7 * filterOperand1;
+        input7filter2 += inputOperand7 * filterOperand2;
+        input7filter3 += inputOperand7 * filterOperand3;
+        input7filter4 += inputOperand7 * filterOperand4;
+        input7filter5 += inputOperand7 * filterOperand5;
+
+        input7filter6 += inputOperand7 * filterOperand6;
+        input7filter7 += inputOperand7 * filterOperand7;
+        input7filter8 += inputOperand7 * filterOperand8;
+        input7filter9 += inputOperand7 * filterOperand9;
+        input7filter10 += inputOperand7 * filterOperand10;
+
+        // Copy Temp Registers to shared buffer 2
+        if(threadIdx.x % 4 < 4){
+            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 0] = inputTemp1;
+            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 1] = inputTemp2;
+            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 2] = inputTemp3;
+            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 3] = inputTemp4;
+            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 4] = inputTemp5;
+            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 5] = inputTemp6;
+            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 6] = inputTemp7;
+        }
+
+        if(threadIdx.x < 32) {
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 0] = filterTemp1;
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 1] = filterTemp2;
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 2] = filterTemp3;
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 3] = filterTemp4;
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 4] = filterTemp5;
+
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 5] = filterTemp6;
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 6] = filterTemp7;
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 7] = filterTemp8;
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 8] = filterTemp9;
+            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 9] = filterTemp10;
+        }
+
+        __syncthreads();
+
+        // Exchange shared buffer 1 and shared buffer 2 and repeat
+                // load next group of Cnum channels
+        blockLoadInputStartIdx += 7 * 7 * 4;
+        inputTemp1 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 0];
+        inputTemp2 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 1];
+        inputTemp3 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 2];
+        inputTemp4 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 3];
+        inputTemp5 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 4];
+        inputTemp6 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 5];
+        inputTemp7 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 6];
+        
+        blockLoadFilterStartIdx += 4;
+        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 0];
+        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 1];
+        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 2];
+        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 3];
+        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 4];
+        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 5];
+        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 6];
+        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 7];
+        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 8];
+        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 9];
+
+        // Copy operands from shared buffer 1 into Operands Registers
+        inputOperand1 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 0];
+        inputOperand2 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 1];
+        inputOperand3 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 2];
+        inputOperand4 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 3];
+        inputOperand5 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 4];
+        inputOperand6 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 5];
+        inputOperand7 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 6];
+
+        filterOperand1 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 0];
+        filterOperand2 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 1];
+        filterOperand3 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 2];
+        filterOperand4 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 3];
+        filterOperand5 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 4];
+
+        filterOperand6 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 5];
+        filterOperand7 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 6];
+        filterOperand8 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 7];
+        filterOperand9 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 8];
+        filterOperand10 = filterSharedBuffer2[(laneID / 4) * 4 + laneID % 4 + 4 * 8 * 9];
+
+        // Compute and Accumulate result in Result Registers
+        input1filter1 += inputOperand1 * filterOperand1;
+        input1filter2 += inputOperand1 * filterOperand2;
+        input1filter3 += inputOperand1 * filterOperand3;
+        input1filter4 += inputOperand1 * filterOperand4;
+        input1filter5 += inputOperand1 * filterOperand5;
+
+        input1filter6 += inputOperand1 * filterOperand6;
+        input1filter7 += inputOperand1 * filterOperand7;
+        input1filter8 += inputOperand1 * filterOperand8;
+        input1filter9 += inputOperand1 * filterOperand9;
+        input1filter10 += inputOperand1 * filterOperand10;
+
+        input2filter1 += inputOperand2 * filterOperand1;
+        input2filter2 += inputOperand2 * filterOperand2;
+        input2filter3 += inputOperand2 * filterOperand3;
+        input2filter4 += inputOperand2 * filterOperand4;
+        input2filter5 += inputOperand2 * filterOperand5;
+
+        input2filter6 += inputOperand2 * filterOperand6;
+        input2filter7 += inputOperand2 * filterOperand7;
+        input2filter8 += inputOperand2 * filterOperand8;
+        input2filter9 += inputOperand2 * filterOperand9;
+        input2filter10 += inputOperand2 * filterOperand10;
+
+        input3filter1 += inputOperand3 * filterOperand1;
+        input3filter2 += inputOperand3 * filterOperand2;
+        input3filter3 += inputOperand3 * filterOperand3;
+        input3filter4 += inputOperand3 * filterOperand4;
+        input3filter5 += inputOperand3 * filterOperand5;
+
+        input3filter6 += inputOperand3 * filterOperand6;
+        input3filter7 += inputOperand3 * filterOperand7;
+        input3filter8 += inputOperand3 * filterOperand8;
+        input3filter9 += inputOperand3 * filterOperand9;
+        input3filter10 += inputOperand3 * filterOperand10;
+
+        input4filter1 += inputOperand4 * filterOperand1;
+        input4filter2 += inputOperand4 * filterOperand2;
+        input4filter3 += inputOperand4 * filterOperand3;
+        input4filter4 += inputOperand4 * filterOperand4;
+        input4filter5 += inputOperand4 * filterOperand5;
+
+        input4filter6 += inputOperand4 * filterOperand6;
+        input4filter7 += inputOperand4 * filterOperand7;
+        input4filter8 += inputOperand4 * filterOperand8;
+        input4filter9 += inputOperand4 * filterOperand9;
+        input4filter10 += inputOperand4 * filterOperand10;
+
+        input5filter1 += inputOperand5 * filterOperand1;
+        input5filter2 += inputOperand5 * filterOperand2;
+        input5filter3 += inputOperand5 * filterOperand3;
+        input5filter4 += inputOperand5 * filterOperand4;
+        input5filter5 += inputOperand5 * filterOperand5;
+
+        input5filter6 += inputOperand5 * filterOperand6;
+        input5filter7 += inputOperand5 * filterOperand7;
+        input5filter8 += inputOperand5 * filterOperand8;
+        input5filter9 += inputOperand5 * filterOperand9;
+        input5filter10 += inputOperand5 * filterOperand10;
+
+        input6filter1 += inputOperand6 * filterOperand1;
+        input6filter2 += inputOperand6 * filterOperand2;
+        input6filter3 += inputOperand6 * filterOperand3;
+        input6filter4 += inputOperand6 * filterOperand4;
+        input6filter5 += inputOperand6 * filterOperand5;
+
+        input6filter6 += inputOperand6 * filterOperand6;
+        input6filter7 += inputOperand6 * filterOperand7;
+        input6filter8 += inputOperand6 * filterOperand8;
+        input6filter9 += inputOperand6 * filterOperand9;
+        input6filter10 += inputOperand6 * filterOperand10;
+
+        input7filter1 += inputOperand7 * filterOperand1;
+        input7filter2 += inputOperand7 * filterOperand2;
+        input7filter3 += inputOperand7 * filterOperand3;
+        input7filter4 += inputOperand7 * filterOperand4;
+        input7filter5 += inputOperand7 * filterOperand5;
+
+        input7filter6 += inputOperand7 * filterOperand6;
+        input7filter7 += inputOperand7 * filterOperand7;
+        input7filter8 += inputOperand7 * filterOperand8;
+        input7filter9 += inputOperand7 * filterOperand9;
+        input7filter10 += inputOperand7 * filterOperand10;
+
+        // Copy Temp Registers to shared buffer 2
+        if(threadIdx.x % 4 < 4){
+            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 0] = inputTemp1;
+            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 1] = inputTemp2;
+            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 2] = inputTemp3;
+            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 3] = inputTemp4;
+            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 4] = inputTemp5;
+            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 5] = inputTemp6;
+            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 6] = inputTemp7;
+        }
+
+        if(threadIdx.x < 32) {
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 0] = filterTemp1;
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 1] = filterTemp2;
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 2] = filterTemp3;
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 3] = filterTemp4;
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 4] = filterTemp5;
+
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 5] = filterTemp6;
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 6] = filterTemp7;
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 7] = filterTemp8;
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 8] = filterTemp9;
+            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 9] = filterTemp10;
+        }
+
+        __syncthreads();
+    }
+    // For loop ends here
+
+    // Parallel Reduction to accumulate result across threads
+    // Cnum threads form one group
+    #pragma unroll
+    for (int offset = (4 >> 1); offset > 0; offset >>= 1) {
+        input1filter1 += __shfl_down_sync(0xffffffff, input1filter1, offset, 4);
+        input1filter2 += __shfl_down_sync(0xffffffff, input1filter2, offset, 4);
+        input1filter3 += __shfl_down_sync(0xffffffff, input1filter3, offset, 4);
+        input1filter4 += __shfl_down_sync(0xffffffff, input1filter4, offset, 4);
+        input1filter5 += __shfl_down_sync(0xffffffff, input1filter5, offset, 4);
+
+        input1filter6 += __shfl_down_sync(0xffffffff, input1filter6, offset, 4);
+        input1filter7 += __shfl_down_sync(0xffffffff, input1filter7, offset, 4);
+        input1filter8 += __shfl_down_sync(0xffffffff, input1filter8, offset, 4);
+        input1filter9 += __shfl_down_sync(0xffffffff, input1filter9, offset, 4);
+        input1filter10 += __shfl_down_sync(0xffffffff, input1filter10, offset, 4);
+
+        input2filter1 += __shfl_down_sync(0xffffffff, input2filter1, offset, 4);
+        input2filter2 += __shfl_down_sync(0xffffffff, input2filter2, offset, 4);
+        input2filter3 += __shfl_down_sync(0xffffffff, input2filter3, offset, 4);
+        input2filter4 += __shfl_down_sync(0xffffffff, input2filter4, offset, 4);
+        input2filter5 += __shfl_down_sync(0xffffffff, input2filter5, offset, 4);
+
+        input2filter6 += __shfl_down_sync(0xffffffff, input2filter6, offset, 4);
+        input2filter7 += __shfl_down_sync(0xffffffff, input2filter7, offset, 4);
+        input2filter8 += __shfl_down_sync(0xffffffff, input2filter8, offset, 4);
+        input2filter9 += __shfl_down_sync(0xffffffff, input2filter9, offset, 4);
+        input2filter10 += __shfl_down_sync(0xffffffff, input2filter10, offset, 4);
+
+        input3filter1 += __shfl_down_sync(0xffffffff, input3filter1, offset, 4);
+        input3filter2 += __shfl_down_sync(0xffffffff, input3filter2, offset, 4);
+        input3filter3 += __shfl_down_sync(0xffffffff, input3filter3, offset, 4);
+        input3filter4 += __shfl_down_sync(0xffffffff, input3filter4, offset, 4);
+        input3filter5 += __shfl_down_sync(0xffffffff, input3filter5, offset, 4);
+
+        input3filter6 += __shfl_down_sync(0xffffffff, input3filter6, offset, 4);
+        input3filter7 += __shfl_down_sync(0xffffffff, input3filter7, offset, 4);
+        input3filter8 += __shfl_down_sync(0xffffffff, input3filter8, offset, 4);
+        input3filter9 += __shfl_down_sync(0xffffffff, input3filter9, offset, 4);
+        input3filter10 += __shfl_down_sync(0xffffffff, input3filter10, offset, 4);
+
+        input4filter1 += __shfl_down_sync(0xffffffff, input4filter1, offset, 4);
+        input4filter2 += __shfl_down_sync(0xffffffff, input4filter2, offset, 4);
+        input4filter3 += __shfl_down_sync(0xffffffff, input4filter3, offset, 4);
+        input4filter4 += __shfl_down_sync(0xffffffff, input4filter4, offset, 4);
+        input4filter5 += __shfl_down_sync(0xffffffff, input4filter5, offset, 4);
+
+        input4filter6 += __shfl_down_sync(0xffffffff, input4filter6, offset, 4);
+        input4filter7 += __shfl_down_sync(0xffffffff, input4filter7, offset, 4);
+        input4filter8 += __shfl_down_sync(0xffffffff, input4filter8, offset, 4);
+        input4filter9 += __shfl_down_sync(0xffffffff, input4filter9, offset, 4);
+        input4filter10 += __shfl_down_sync(0xffffffff, input4filter10, offset, 4);
+
+        input5filter1 += __shfl_down_sync(0xffffffff, input5filter1, offset, 4);
+        input5filter2 += __shfl_down_sync(0xffffffff, input5filter2, offset, 4);
+        input5filter3 += __shfl_down_sync(0xffffffff, input5filter3, offset, 4);
+        input5filter4 += __shfl_down_sync(0xffffffff, input5filter4, offset, 4);
+        input5filter5 += __shfl_down_sync(0xffffffff, input5filter5, offset, 4);
+
+        input5filter6 += __shfl_down_sync(0xffffffff, input5filter6, offset, 4);
+        input5filter7 += __shfl_down_sync(0xffffffff, input5filter7, offset, 4);
+        input5filter8 += __shfl_down_sync(0xffffffff, input5filter8, offset, 4);
+        input5filter9 += __shfl_down_sync(0xffffffff, input5filter9, offset, 4);
+        input5filter10 += __shfl_down_sync(0xffffffff, input5filter10, offset, 4);
+
+        input6filter1 += __shfl_down_sync(0xffffffff, input6filter1, offset, 4);
+        input6filter2 += __shfl_down_sync(0xffffffff, input6filter2, offset, 4);
+        input6filter3 += __shfl_down_sync(0xffffffff, input6filter3, offset, 4);
+        input6filter4 += __shfl_down_sync(0xffffffff, input6filter4, offset, 4);
+        input6filter5 += __shfl_down_sync(0xffffffff, input6filter5, offset, 4);
+
+        input6filter6 += __shfl_down_sync(0xffffffff, input6filter6, offset, 4);
+        input6filter7 += __shfl_down_sync(0xffffffff, input6filter7, offset, 4);
+        input6filter8 += __shfl_down_sync(0xffffffff, input6filter8, offset, 4);
+        input6filter9 += __shfl_down_sync(0xffffffff, input6filter9, offset, 4);
+        input6filter10 += __shfl_down_sync(0xffffffff, input6filter10, offset, 4);
+
+        input7filter1 += __shfl_down_sync(0xffffffff, input7filter1, offset, 4);
+        input7filter2 += __shfl_down_sync(0xffffffff, input7filter2, offset, 4);
+        input7filter3 += __shfl_down_sync(0xffffffff, input7filter3, offset, 4);
+        input7filter4 += __shfl_down_sync(0xffffffff, input7filter4, offset, 4);
+        input7filter5 += __shfl_down_sync(0xffffffff, input7filter5, offset, 4);
+
+        input7filter6 += __shfl_down_sync(0xffffffff, input7filter6, offset, 4);
+        input7filter7 += __shfl_down_sync(0xffffffff, input7filter7, offset, 4);
+        input7filter8 += __shfl_down_sync(0xffffffff, input7filter8, offset, 4);
+        input7filter9 += __shfl_down_sync(0xffffffff, input7filter9, offset, 4);
+        input7filter10 += __shfl_down_sync(0xffffffff, input7filter10, offset, 4);
+    }
+
+    // Store output
+    int blockWriteOutputStartIdx = (blockIdx.x / 2) * outputWidth * outputHeight * outputChannel + (blockIdx.x % 2) * outputWidth * outputHeight * (outputChannel / 2);
+
+    if(laneID % 4 == 0) {
+        output[blockWriteOutputStartIdx + 0 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter1;
+        output[blockWriteOutputStartIdx + 0 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter1;
+        output[blockWriteOutputStartIdx + 0 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter1;
+        output[blockWriteOutputStartIdx + 0 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter1;
+        output[blockWriteOutputStartIdx + 0 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter1;
+        output[blockWriteOutputStartIdx + 0 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter1;
+        output[blockWriteOutputStartIdx + 0 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter1;
+
+        output[blockWriteOutputStartIdx + 1 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter2;
+        output[blockWriteOutputStartIdx + 1 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter2;
+        output[blockWriteOutputStartIdx + 1 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter2;
+        output[blockWriteOutputStartIdx + 1 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter2;
+        output[blockWriteOutputStartIdx + 1 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter2;
+        output[blockWriteOutputStartIdx + 1 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter2;
+        output[blockWriteOutputStartIdx + 1 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter2;
+
+        output[blockWriteOutputStartIdx + 2 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter3;
+        output[blockWriteOutputStartIdx + 2 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter3;
+        output[blockWriteOutputStartIdx + 2 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter3;
+        output[blockWriteOutputStartIdx + 2 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter3;
+        output[blockWriteOutputStartIdx + 2 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter3;
+        output[blockWriteOutputStartIdx + 2 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter3;
+        output[blockWriteOutputStartIdx + 2 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter3;
+
+        output[blockWriteOutputStartIdx + 3 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter4;
+        output[blockWriteOutputStartIdx + 3 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter4;
+        output[blockWriteOutputStartIdx + 3 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter4;
+        output[blockWriteOutputStartIdx + 3 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter4;
+        output[blockWriteOutputStartIdx + 3 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter4;
+        output[blockWriteOutputStartIdx + 3 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter4;
+        output[blockWriteOutputStartIdx + 3 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter4;
+
+        output[blockWriteOutputStartIdx + 4 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter5;
+        output[blockWriteOutputStartIdx + 4 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter5;
+        output[blockWriteOutputStartIdx + 4 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter5;
+        output[blockWriteOutputStartIdx + 4 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter5;
+        output[blockWriteOutputStartIdx + 4 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter5;
+        output[blockWriteOutputStartIdx + 4 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter5;
+        output[blockWriteOutputStartIdx + 4 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter5;
+
+        output[blockWriteOutputStartIdx + 5 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter6;
+        output[blockWriteOutputStartIdx + 5 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter6;
+        output[blockWriteOutputStartIdx + 5 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter6;
+        output[blockWriteOutputStartIdx + 5 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter6;
+        output[blockWriteOutputStartIdx + 5 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter6;
+        output[blockWriteOutputStartIdx + 5 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter6;
+        output[blockWriteOutputStartIdx + 5 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter6;
+
+        output[blockWriteOutputStartIdx + 6 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter7;
+        output[blockWriteOutputStartIdx + 6 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter7;
+        output[blockWriteOutputStartIdx + 6 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter7;
+        output[blockWriteOutputStartIdx + 6 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter7;
+        output[blockWriteOutputStartIdx + 6 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter7;
+        output[blockWriteOutputStartIdx + 6 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter7;
+        output[blockWriteOutputStartIdx + 6 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter7;
+
+        output[blockWriteOutputStartIdx + 7 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter8;
+        output[blockWriteOutputStartIdx + 7 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter8;
+        output[blockWriteOutputStartIdx + 7 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter8;
+        output[blockWriteOutputStartIdx + 7 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter8;
+        output[blockWriteOutputStartIdx + 7 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter8;
+        output[blockWriteOutputStartIdx + 7 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter8;
+        output[blockWriteOutputStartIdx + 7 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter8;
+
+        output[blockWriteOutputStartIdx + 8 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter9;
+        output[blockWriteOutputStartIdx + 8 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter9;
+        output[blockWriteOutputStartIdx + 8 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter9;
+        output[blockWriteOutputStartIdx + 8 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter9;
+        output[blockWriteOutputStartIdx + 8 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter9;
+        output[blockWriteOutputStartIdx + 8 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter9;
+        output[blockWriteOutputStartIdx + 8 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter9;
+
+        output[blockWriteOutputStartIdx + 9 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 0] = input1filter10;
+        output[blockWriteOutputStartIdx + 9 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 1] = input2filter10;
+        output[blockWriteOutputStartIdx + 9 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 2] = input3filter10;
+        output[blockWriteOutputStartIdx + 9 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 3] = input4filter10;
+        output[blockWriteOutputStartIdx + 9 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 4] = input5filter10;
+        output[blockWriteOutputStartIdx + 9 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 5] = input6filter10;
+        output[blockWriteOutputStartIdx + 9 * 8 * outputHeight * outputWidth + warpID * outputWidth + (laneID / 4) * outputHeight * outputWidth + 6] = input7filter10;
+    }
+}
+*/
 
 // ===========================================================================
 // Input Size 7 x 7, Input Channel 160, Output Channel 960
@@ -2700,7 +3282,6 @@ int main(int argc, char* argv[]) {
     // ===========================================================================
     if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2716,7 +3297,6 @@ int main(int argc, char* argv[]) {
         inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
     } else if (inputBatchNumber == 8 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2731,30 +3311,13 @@ int main(int argc, char* argv[]) {
         printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
         inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
     } else if (inputBatchNumber == 16 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
-        /*
-        cudaEventRecord(start);
 
-        // Convolution
-        dim3 gridSize(outputBatchNumber, outputChannel / 16);
-        dim3 blockSize(7, 7, 16);
-        InputBatch_16_Input_7x7_InChannel_576_OutChannel_160<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
-            inputBatchNumber, inputChannel, inputHeight, inputWidth,
-            filterOutChannel, filterInChannel, filterHeight, filterWidth,
-            outputBatchNumber, outputChannel, outputHeight, outputWidth);
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&elapsedTime, start, stop);
-        kernelTime = elapsedTime;
-        printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
-        inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
-        */
     } else if (inputBatchNumber == 32 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
 
     } else if (inputBatchNumber == 64 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
         
     } else if (inputBatchNumber == 128 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber * outputHeight * outputWidth * outputChannel / (7 * 7 * 80));
         dim3 blockSize(7 * 32);
@@ -2774,7 +3337,6 @@ int main(int argc, char* argv[]) {
     // ===========================================================================
     else if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 160 && outputChannel == 960) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2789,30 +3351,13 @@ int main(int argc, char* argv[]) {
         printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
         inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
     } else if (inputBatchNumber == 8 && inputHeight == 7 && inputChannel == 160 && outputChannel == 960) {
-        /*
-        cudaEventRecord(start);
 
-        // Convolution
-        dim3 gridSize(outputBatchNumber, outputChannel / 16);
-        dim3 blockSize(7, 7, 16);
-        InputBatch_1_Input_7x7_InChannel_160_OutChannel_960<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
-            inputBatchNumber, inputChannel, inputHeight, inputWidth,
-            filterOutChannel, filterInChannel, filterHeight, filterWidth,
-            outputBatchNumber, outputChannel, outputHeight, outputWidth);
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&elapsedTime, start, stop);
-        kernelTime = elapsedTime;
-        printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
-        inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
-        */
     } 
     // ===========================================================================
     // Input Size 7 x 7, Input Channel 960, Output Channel 160
     // ===========================================================================
     else if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 960 && outputChannel == 160) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2828,7 +3373,6 @@ int main(int argc, char* argv[]) {
         inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
     } else if (inputBatchNumber == 8 && inputHeight == 7 && inputChannel == 960 && outputChannel == 160) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2843,30 +3387,13 @@ int main(int argc, char* argv[]) {
         printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
         inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
     } else if (inputBatchNumber == 16 && inputHeight == 7 && inputChannel == 960 && outputChannel == 160) {
-        /*
-        cudaEventRecord(start);
 
-        // Convolution
-        dim3 gridSize(outputBatchNumber, outputChannel / 16);
-        dim3 blockSize(7, 7, 16);
-        InputBatch_16_Input_7x7_InChannel_960_OutChannel_160<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
-            inputBatchNumber, inputChannel, inputHeight, inputWidth,
-            filterOutChannel, filterInChannel, filterHeight, filterWidth,
-            outputBatchNumber, outputChannel, outputHeight, outputWidth);
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&elapsedTime, start, stop);
-        kernelTime = elapsedTime;
-        printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
-        inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
-        */
     } 
     // ===========================================================================
     // Input Size 7 x 7, Input Channel 960, Output Channel 320
     // ===========================================================================
     else if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 960 && outputChannel == 320) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2881,30 +3408,13 @@ int main(int argc, char* argv[]) {
         printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
         inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
     } else if (inputBatchNumber == 8 && inputHeight == 7 && inputChannel == 960 && outputChannel == 320) {
-        /*
-        cudaEventRecord(start);
 
-        // Convolution
-        dim3 gridSize(outputBatchNumber, outputChannel / 16);
-        dim3 blockSize(7, 7, 16);
-        InputBatch_8_Input_7x7_InChannel_960_OutChannel_320<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
-            inputBatchNumber, inputChannel, inputHeight, inputWidth,
-            filterOutChannel, filterInChannel, filterHeight, filterWidth,
-            outputBatchNumber, outputChannel, outputHeight, outputWidth);
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&elapsedTime, start, stop);
-        kernelTime = elapsedTime;
-        printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
-        inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
-        */
     } 
     // ===========================================================================
     // Input Size 7 x 7, Input Channel 320, Output Channel 1280
     // ===========================================================================
     else if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 320 && outputChannel == 1280) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2924,7 +3434,6 @@ int main(int argc, char* argv[]) {
     // ===========================================================================
     else if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 672 && outputChannel == 192) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2939,30 +3448,13 @@ int main(int argc, char* argv[]) {
         printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
         inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
     } else if (inputBatchNumber == 8 && inputHeight == 7 && inputChannel == 672 && outputChannel == 192) {
-        /*
-        cudaEventRecord(start);
 
-        // Convolution
-        dim3 gridSize(outputBatchNumber, outputChannel / 16);
-        dim3 blockSize(7, 7, 16);
-        InputBatch_8_Input_7x7_InChannel_672_OutChannel_192<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
-            inputBatchNumber, inputChannel, inputHeight, inputWidth,
-            filterOutChannel, filterInChannel, filterHeight, filterWidth,
-            outputBatchNumber, outputChannel, outputHeight, outputWidth);
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&elapsedTime, start, stop);
-        kernelTime = elapsedTime;
-        printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
-        inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
-        */
     } 
     // ===========================================================================
     // Input Size 7 x 7, Input Channel 192, Output Channel 1152
     // ===========================================================================
     else if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 192 && outputChannel == 1152) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -2977,30 +3469,13 @@ int main(int argc, char* argv[]) {
         printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
         inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
     } else if (inputBatchNumber == 8 && inputHeight == 7 && inputChannel == 192 && outputChannel == 1152) {
-        /*
-        cudaEventRecord(start);
 
-        // Convolution
-        dim3 gridSize(outputBatchNumber, outputChannel / 16);
-        dim3 blockSize(7, 7, 16);
-        InputBatch_8_Input_7x7_InChannel_192_OutChannel_1152<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
-            inputBatchNumber, inputChannel, inputHeight, inputWidth,
-            filterOutChannel, filterInChannel, filterHeight, filterWidth,
-            outputBatchNumber, outputChannel, outputHeight, outputWidth);
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&elapsedTime, start, stop);
-        kernelTime = elapsedTime;
-        printf("Elapsed Time for Pointwise Convolution Input Batch %d, Input %d x %d, Input Channel %d, Ouput Channel %d: %f ms.\n", 
-        inputBatchNumber, inputHeight, inputWidth, inputChannel, outputChannel, elapsedTime);
-        */
     } 
     // ===========================================================================
     // Input Size 7 x 7, Input Channel 1152, Output Channel 192
     // ===========================================================================
     else if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 1152 && outputChannel == 192) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
@@ -3020,7 +3495,6 @@ int main(int argc, char* argv[]) {
     // ===========================================================================
     else if (inputBatchNumber == 1 && inputHeight == 7 && inputChannel == 1152 && outputChannel == 320) {
         cudaEventRecord(start);
-
         // Convolution
         dim3 gridSize(outputBatchNumber, outputChannel / 16);
         dim3 blockSize(7, 7, 16);
