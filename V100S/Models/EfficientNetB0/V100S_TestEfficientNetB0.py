@@ -1,12 +1,12 @@
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+import torch.optim as optim
 from torchvision import datasets
 import torchvision.transforms as transforms
-import torch.optim as optim
 from torchvision.models import efficientnet_b0
+from ModifiedEfficientNetB0Model import ModifiedEfficientNetB0
 from torch.profiler import profile, record_function, ProfilerActivity
-from DepthwiseLayer import OptimizedDepthwiseLayer
 import time
 import csv
 import sys
@@ -55,7 +55,7 @@ for X, y in test_dataloader:
 
 # ===================================================================================================
 # Creat original efficientnet b0
-originalModel = efficientnet_b0(weights=None)
+originalModel = efficientnet_b0()
 originalModel.classifier = nn.Sequential(
     nn.Dropout(p=0.2, inplace=True),
     nn.Linear(in_features=1280, out_features=10, bias=True)
@@ -67,27 +67,7 @@ loss_fn_Original= nn.CrossEntropyLoss()
 
 # ===================================================================================================
 # Create modified efficientnet b0
-modifiedModel = efficientnet_b0(weights=None)
-modifiedModel.features[1][0].block[0][0] = OptimizedDepthwiseLayer(inputChannel = 32, outputChannel = 32, filterHeight = 3, stride = 1)
-modifiedModel.features[2][0].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 96, outputChannel = 96, filterHeight = 3, stride = 2)
-modifiedModel.features[2][1].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 144, outputChannel = 144, filterHeight = 3, stride = 1)
-modifiedModel.features[3][0].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 144, outputChannel = 144, filterHeight = 5, stride = 2)
-modifiedModel.features[3][1].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 240, outputChannel = 240, filterHeight = 5, stride = 1)
-modifiedModel.features[4][0].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 240, outputChannel = 240, filterHeight = 3, stride = 2)
-modifiedModel.features[4][1].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 480, outputChannel = 480, filterHeight = 3, stride = 1)
-modifiedModel.features[4][2].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 480, outputChannel = 480, filterHeight = 3, stride = 1)
-modifiedModel.features[5][0].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 480, outputChannel = 480, filterHeight = 5, stride = 1)
-modifiedModel.features[5][1].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 672, outputChannel = 672, filterHeight = 5, stride = 1)
-modifiedModel.features[5][2].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 672, outputChannel = 672, filterHeight = 5, stride = 1)
-modifiedModel.features[6][0].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 672, outputChannel = 672, filterHeight = 5, stride = 2)
-modifiedModel.features[6][1].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 1152, outputChannel = 1152, filterHeight = 5, stride = 1)
-modifiedModel.features[6][2].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 1152, outputChannel = 1152, filterHeight = 5, stride = 1)
-modifiedModel.features[6][3].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 1152, outputChannel = 1152, filterHeight = 5, stride = 1)
-modifiedModel.features[7][0].block[1][0] = OptimizedDepthwiseLayer(inputChannel = 1152, outputChannel = 1152, filterHeight = 3, stride = 1)
-modifiedModel.classifier = nn.Sequential(
-    nn.Dropout(p=0.2, inplace=True),
-    nn.Linear(in_features=1280, out_features=10, bias=True)
-)
+modifiedModel = ModifiedEfficientNetB0()
 modifiedModel.cuda()
 
 # Loss function and optimizer for modified model

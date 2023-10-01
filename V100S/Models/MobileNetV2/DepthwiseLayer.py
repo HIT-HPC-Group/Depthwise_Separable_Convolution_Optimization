@@ -56,7 +56,7 @@ class OptimizedDepthwiseLayer(nn.Module):
         self.dilation = 1
         self.groups = inputChannel
     
-        self.filter = nn.Parameter(torch.empty((self.inputChannel, 1, self.filterHeight, self.filterHeight), dtype=torch.float))
+        self.filter = nn.Parameter(torch.empty((self.inputChannel, 1, self.filterHeight, self.filterHeight), dtype = torch.float))
         self.reset_parameters()
 
     def reset_parameters(self):

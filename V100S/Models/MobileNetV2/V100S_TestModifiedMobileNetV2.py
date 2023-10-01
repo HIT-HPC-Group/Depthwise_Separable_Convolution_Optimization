@@ -1,12 +1,12 @@
 import torch
 from torch import nn
+import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets
 import torchvision.transforms as transforms
-import torch.optim as optim
 from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
+from ModifiedMobileNetV2Model import ModifiedMobileNetV2
 from torch.profiler import profile, record_function, ProfilerActivity
-from DepthwiseLayer import OptimizedDepthwiseLayer
 import time
 import csv
 import sys
@@ -55,9 +55,9 @@ for X, y in test_dataloader:
     break
 
 # ===================================================================================================
-# Creat original mobilenet v2
+# Create original mobilenet v2
 originalModel = mobilenet_v2(weights=None)
-originalModel.classifier = nn.Linear(in_features=1280, out_features=10, bias=True)
+originalModel.classifier[1] = nn.Linear(in_features=1280, out_features=10, bias=True)
 originalModel.cuda()
 
 # Loss function and optimizer for original model
@@ -65,25 +65,7 @@ loss_fn_Original= nn.CrossEntropyLoss()
 
 # ===================================================================================================
 # Create modified mobilenet v2
-modifiedModel = mobilenet_v2(weights=None)
-modifiedModel.features[1].conv[0][0] = OptimizedDepthwiseLayer(inputChannel = 32, outputChannel = 32, filterHeight = 3, stride = 1)
-modifiedModel.features[2].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 96, outputChannel = 96, filterHeight = 3, stride = 2)
-modifiedModel.features[3].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 144, outputChannel = 144, filterHeight = 3, stride = 1)
-modifiedModel.features[4].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 144, outputChannel = 144, filterHeight = 3, stride = 2)
-modifiedModel.features[5].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 192, outputChannel = 192, filterHeight = 3, stride = 1)
-modifiedModel.features[6].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 192, outputChannel = 192, filterHeight = 3, stride = 1)
-modifiedModel.features[7].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 192, outputChannel = 192, filterHeight = 3, stride = 2)
-modifiedModel.features[8].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 384, outputChannel = 384, filterHeight = 3, stride = 1)
-modifiedModel.features[9].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 384, outputChannel = 384, filterHeight = 3, stride = 1)
-modifiedModel.features[10].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 384, outputChannel = 384, filterHeight = 3, stride = 1)
-modifiedModel.features[11].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 384, outputChannel = 384, filterHeight = 3, stride = 1)
-modifiedModel.features[12].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 576, outputChannel = 576, filterHeight = 3, stride = 1)
-modifiedModel.features[13].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 576, outputChannel = 576, filterHeight = 3, stride = 1)
-modifiedModel.features[14].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 576, outputChannel = 576, filterHeight = 3, stride = 2)
-modifiedModel.features[15].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 960, outputChannel = 960, filterHeight = 3, stride = 1)
-modifiedModel.features[16].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 960, outputChannel = 960, filterHeight = 3, stride = 1)
-modifiedModel.features[17].conv[1][0] = OptimizedDepthwiseLayer(inputChannel = 960, outputChannel = 960, filterHeight = 3, stride = 1)
-modifiedModel.classifier = nn.Linear(in_features=1280, out_features=10, bias=True)
+modifiedModel = ModifiedMobileNetV2(weights=None)
 modifiedModel.cuda()
 
 # Loss function and optimizer for modified model
