@@ -944,8 +944,8 @@ Each thread block is responsible for generating 7 * 7 * 80 output data.
 Each warp is responsible for generating 7 * 80 output data.
 
 V100S: 128 576 7 160
-Kernel: 0.456832 ms
-cuDNN: 0.195808 ms
+Kernel: 0.737856 ms
+cuDNN: 0.306400 ms
 */
 
 __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v1(const float* input, const float* filter, float* output,
@@ -1946,8 +1946,8 @@ Each thread block is responsible for generating 7 * 7 * 80 output data.
 Each warp is responsible for generating 7 * 80 output data.
 
 V100S: 128 576 7 160
-Kernel: 0.349952 ms
-cuDNN:  0.201184 ms
+Kernel: 0.578496 ms
+cuDNN:  0.307392 ms
 */
 
 __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v2(const float* input, const float* filter, float* output,
@@ -2526,11 +2526,11 @@ Each thread block is responsible for generating 7 * 7 * 80 output data.
 Each warp is responsible for generating 7 * 80 output data.
 
 V100S: 128 576 7 160
-Kernel:  ms
-cuDNN:   ms
+Kernel: 0.424416 ms
+cuDNN:  0.302816 ms
 */
 
-__global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v2(const float* input, const float* filter, float* output,
+__global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v3(const float* input, const float* filter, float* output,
     int inputBatchNumber, int inputChannel, int inputHeight, int inputWidth,
     int filterOutChannel, int filterInChannel, int filterHeight, int filterWidth,
     int outputBatchNumber, int outputChannel, int outputHeight, int outputWidth) {
@@ -2544,11 +2544,8 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v2(const f
     __shared__ float filterSharedBuffer2[4 * 80];
 
     // to hold loaded operands temp.
-    // number of input temp = warpH (7)
-    // number of filter temp = WarpW / (warpSize / Cnum) = 80 / (32 / 4)
-    float inputTemp1 = 0, inputTemp2 = 0, inputTemp3 = 0, inputTemp4 = 0, inputTemp5 = 0, inputTemp6 = 0, inputTemp7 = 0;
-    float filterTemp1 = 0, filterTemp2 = 0, filterTemp3 = 0, filterTemp4 = 0, filterTemp5 = 0;
-    float filterTemp6 = 0, filterTemp7 = 0, filterTemp8 = 0, filterTemp9 = 0, filterTemp10 = 0;
+    float inputTemp1 = 0;
+    float filterTemp1 = 0, filterTemp2 = 0;
 
     // to hold operands
     // same number as temp registers
@@ -2601,25 +2598,15 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v2(const f
     for(int i = 0; i < inputChannel / (2 * 4); i++) {
         // load next group of Cnum channels
         blockLoadInputStartIdx += 7 * 7 * 4;
-        inputTemp1 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 0];
-        inputTemp2 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 1];
-        inputTemp3 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 2];
-        inputTemp4 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 3];
-        inputTemp5 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 4];
-        inputTemp6 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 5];
-        inputTemp7 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 6];
+        if(threadIdx.x < 7 * 7 * 4) {
+            inputTemp1 = input[blockLoadInputStartIdx + threadIdx.x];
+        }
         
         blockLoadFilterStartIdx += 4;
-        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 0];
-        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 1];
-        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 2];
-        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 3];
-        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 4];
-        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 5];
-        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 6];
-        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 7];
-        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 8];
-        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 9];
+        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * 7 * inputChannel * 0];
+        if(threadIdx.x < (4 * 80 - 32 * 7)){
+            filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * 7 * inputChannel * 1];
+        }
 
         // Copy operands from shared buffer 1 into Operands Registers
         inputOperand1 = inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 0];
@@ -2728,54 +2715,28 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v2(const f
         input7filter10 += inputOperand7 * filterOperand10;
 
         // Copy Temp Registers to shared buffer 2
-        if(threadIdx.x % 4 < 4){
-            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 0] = inputTemp1;
-            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 1] = inputTemp2;
-            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 2] = inputTemp3;
-            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 3] = inputTemp4;
-            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 4] = inputTemp5;
-            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 5] = inputTemp6;
-            inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 6] = inputTemp7;
+        if(threadIdx.x < 7 * 7 * 4){
+            inputSharedBuffer2[threadIdx.x] = inputTemp1;
         }
 
-        if(threadIdx.x < 32) {
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 0] = filterTemp1;
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 1] = filterTemp2;
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 2] = filterTemp3;
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 3] = filterTemp4;
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 4] = filterTemp5;
-
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 5] = filterTemp6;
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 6] = filterTemp7;
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 7] = filterTemp8;
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 8] = filterTemp9;
-            filterSharedBuffer2[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 9] = filterTemp10;
+        filterSharedBuffer2[threadIdx.x + 32 * 7 * 0] = filterTemp1;       // 56 channels
+        if(threadIdx.x < (4 * 80 - 32 * 7)){
+            filterSharedBuffer2[threadIdx.x + 32 * 7 * 1] = filterTemp2;   // 24 channels
         }
-
         __syncthreads();
 
         // Exchange shared buffer 1 and shared buffer 2 and repeat
-                // load next group of Cnum channels
+        // load next group of Cnum channels
         blockLoadInputStartIdx += 7 * 7 * 4;
-        inputTemp1 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 0];
-        inputTemp2 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 1];
-        inputTemp3 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 2];
-        inputTemp4 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 3];
-        inputTemp5 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 4];
-        inputTemp6 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 5];
-        inputTemp7 = input[blockLoadInputStartIdx + warpID * 7 + (laneID % 4) * 7 * 7 + 6];
+        if(threadIdx.x < 7 * 7 * 4) {
+            inputTemp1 = input[blockLoadInputStartIdx + threadIdx.x];
+        }
         
         blockLoadFilterStartIdx += 4;
-        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 0];
-        filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 1];
-        filterTemp3 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 2];
-        filterTemp4 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 3];
-        filterTemp5 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 4];
-        filterTemp6 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 5];
-        filterTemp7 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 6];
-        filterTemp8 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 7];
-        filterTemp9 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 8];
-        filterTemp10 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * inputChannel * 9];
+        filterTemp1 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * 7 * inputChannel * 0];
+        if(threadIdx.x < (4 * 80 - 32 * 7)){
+            filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * 7 * inputChannel * 1];
+        }
 
         // Copy operands from shared buffer 1 into Operands Registers
         inputOperand1 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 0];
@@ -2883,31 +2844,15 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v2(const f
         input7filter9 += inputOperand7 * filterOperand9;
         input7filter10 += inputOperand7 * filterOperand10;
 
-        // Copy Temp Registers to shared buffer 2
-        if(threadIdx.x % 4 < 4){
-            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 0] = inputTemp1;
-            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 1] = inputTemp2;
-            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 2] = inputTemp3;
-            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 3] = inputTemp4;
-            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 4] = inputTemp5;
-            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 5] = inputTemp6;
-            inputSharedBuffer1[warpID * 7 + (laneID % 4) * 7 * 7 + 6] = inputTemp7;
+        // Copy Temp Registers to shared buffer 1
+        if(threadIdx.x < 7 * 7 * 4){
+            inputSharedBuffer1[threadIdx.x] = inputTemp1;
         }
 
-        if(threadIdx.x < 32) {
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 0] = filterTemp1;
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 1] = filterTemp2;
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 2] = filterTemp3;
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 3] = filterTemp4;
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 4] = filterTemp5;
-
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 5] = filterTemp6;
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 6] = filterTemp7;
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 7] = filterTemp8;
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 8] = filterTemp9;
-            filterSharedBuffer1[(threadIdx.x / 4) * 4 + threadIdx.x % 4 + 4 * 8 * 9] = filterTemp10;
+        filterSharedBuffer1[threadIdx.x + 32 * 7 * 0] = filterTemp1;       // 56 channels
+        if(threadIdx.x < (4 * 80 - 32 * 7)){
+            filterSharedBuffer1[threadIdx.x + 32 * 7 * 1] = filterTemp2;   // 24 channels
         }
-
         __syncthreads();
     }
     // For loop ends here
@@ -3892,13 +3837,13 @@ int main(int argc, char* argv[]) {
     } else if (inputBatchNumber == 32 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
 
     } else if (inputBatchNumber == 64 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
-        
+
     } else if (inputBatchNumber == 128 && inputHeight == 7 && inputChannel == 576 && outputChannel == 160) {
         cudaEventRecord(start);
         // Convolution
         dim3 gridSize(outputBatchNumber * outputHeight * outputWidth * outputChannel / (7 * 7 * 80));
         dim3 blockSize(7 * 32);
-        InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v2<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
+        InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v3<<<gridSize, blockSize>>>(deviceInput, deviceFilter, deviceKernelOutput,
             inputBatchNumber, inputChannel, inputHeight, inputWidth,
             filterOutChannel, filterInChannel, filterHeight, filterWidth,
             outputBatchNumber, outputChannel, outputHeight, outputWidth);
