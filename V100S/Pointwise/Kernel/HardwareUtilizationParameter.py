@@ -1,4 +1,7 @@
 import math
+import pandas as pd
+import numpy as np
+import openpyxl
 
 # Define constants of hardware resources
 # Warp Size
@@ -2404,8 +2407,37 @@ def main():
                     [1152, 7, 192], 
                     [1152, 7, 320]]
 
-    # device, combination[0], combination[1], combination[2], combination[3], combination[4], batchSize, layerConfig[2], layerConfig[1], layerConfig[1], combination[5], combination[6], utilizationAI[0], utilizationAI[1]]
-    #       [blockNumPerSM,   warpNumPerBlock, outputChannelPerWarp, outputWidthPerWarp, channelGroupSize,                                                horizontalRepeat, verticalRepeat]
+    # Create Result Table
+    GPUTable = pd.DataFrame(columns = ['Input Channel', 'Input Height/Width', 'Output Channel', 'Input Batch Size = 1','Input Batch Size = 8','Input Batch Size = 16','Input Batch Size = 32','Input Batch Size = 64','Input Batch Size = 128'])
+    DCUTable = pd.DataFrame(columns = ['Input Channel', 'Input Height/Width', 'Output Channel', 'Input Batch Size = 1','Input Batch Size = 8','Input Batch Size = 16','Input Batch Size = 32','Input Batch Size = 64','Input Batch Size = 128'])
+    
+    # GPU
+    for layerConfig in layerConfigs:
+        GPUresult = []
+        for batchSize in batchSizeOptions:
+            bestParameters = getBestHardwareResourceParameters("GPU", batchSize, layerConfig)
+            # warpNumPerBlock: bestParameters[2], outputChannelPerWarp: bestParameters[3], outputWidthPerWarp: bestParameters[4], channelGroupSize: bestParameters[5]
+            # Horizontal Repeat: bestParameters[10], Vertical Repeat: bestParameters[11]
+            tmp = '{}, {}, {}, {}, {}, {}'.format(int(bestParameters[2]), int(bestParameters[3]), int(bestParameters[4]), int(bestParameters[5]), int(bestParameters[10]), int(bestParameters[11]))
+            GPUresult.append(tmp)
+        GPUTable = pd.DataFrame(np.insert(GPUTable.values, len(GPUTable.index), values=[layerConfig[0], layerConfig[1], layerConfig[2], GPUresult[0], GPUresult[1], GPUresult[2], GPUresult[3], GPUresult[4], GPUresult[5]], axis = 0), columns = ['Input Channel', 'Input Height/Width', 'Output Channel', 'Input Batch Size = 1','Input Batch Size = 8','Input Batch Size = 16','Input Batch Size = 32','Input Batch Size = 64','Input Batch Size = 128'])
+    
+    # DCU
+    for layerConfig in layerConfigs:
+        DCUresult = []
+        for batchSize in batchSizeOptions:
+            bestParameters = getBestHardwareResourceParameters("DCU", batchSize, layerConfig)
+            # warpNumPerBlock: bestParameters[2], outputChannelPerWarp: bestParameters[3], outputWidthPerWarp: bestParameters[4], channelGroupSize: bestParameters[5]
+            # Horizontal Repeat: bestParameters[10], Vertical Repeat: bestParameters[11]
+            tmp = '{}, {}, {}, {}, {}, {}'.format(int(bestParameters[2]), int(bestParameters[3]), int(bestParameters[4]), int(bestParameters[5]), int(bestParameters[10]), int(bestParameters[11]))
+            DCUresult.append(tmp)
+        DCUTable = pd.DataFrame(np.insert(DCUTable.values, len(DCUTable.index), values=[layerConfig[0], layerConfig[1], layerConfig[2], DCUresult[0], DCUresult[1], DCUresult[2], DCUresult[3], DCUresult[4], DCUresult[5]], axis = 0), columns = ['Input Channel', 'Input Height/Width', 'Output Channel', 'Input Batch Size = 1','Input Batch Size = 8','Input Batch Size = 16','Input Batch Size = 32','Input Batch Size = 64','Input Batch Size = 128'])
+
+    # Write table
+    GPUTable.to_excel(r"./Hardware_Parameter_V100S.xlsx")
+    DCUTable.to_excel(r"./Hardware_Parameter_DCU.xlsx") 
+
+    """
     # GPU
     print("For GPU: ")
     for batchSize in batchSizeOptions:
@@ -2414,6 +2446,7 @@ def main():
             print("Input Batch Number: ", batchSize, ", Input Height/Width: ", layerConfig[1], ", Input Channel: ", layerConfig[0], ", Output Channel: ", layerConfig[2])
             print("Block Num Per SM: ", bestParameters[1], ", warpNumPerBlock: ", bestParameters[2], ", outputChannelPerWarp:", bestParameters[3], ", outputWidthPerWarp: ", bestParameters[4], ", channelGroupSize: ", bestParameters[5])
             print("Horizontal Repeat: ", bestParameters[10], ", Vertical Repeat: ", bestParameters[11])
+            print("SM Utilization: ", bestParameters[12], ", Arithmetic Intensity: ", bestParameters[13] )
             print("\n")
     print("GPU Finished!")
     print("====================================================")
@@ -2426,8 +2459,10 @@ def main():
             print("Input Batch Number: ", batchSize, ", Input Height/Width: ", layerConfig[1], ", Input Channel: ", layerConfig[0], ", Output Channel: ", layerConfig[2])
             print("Block Num Per SM: ", bestParameters[1], ", warpNumPerBlock: ", bestParameters[2], ", outputChannelPerWarp:", bestParameters[3], ", outputWidthPerWarp: ", bestParameters[4], ", channelGroupSize: ", bestParameters[5])
             print("Horizontal Repeat: ", bestParameters[10], ", Vertical Repeat: ", bestParameters[11])
+            print("SM Utilization: ", bestParameters[12], ", Arithmetic Intensity: ", bestParameters[13] )
             print("\n")
     print("DCU Finished!")
+    """
 
 if __name__=="__main__":
     main()
