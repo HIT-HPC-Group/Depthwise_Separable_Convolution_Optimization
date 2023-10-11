@@ -2516,10 +2516,12 @@ Grid:
 Block:
     blockDim.x = 32 * 7;
 
-warpNum = 7
-WarpH = 7
-WarpW = 80
-Cnum = 4
+warpNumPerBlock = 7
+outputWidthPerWarp = 7
+outputChannelPerWarp = 80
+channelGroupSize = 4
+HorizontalRepeat = 7
+VerticalRepeat = 1
 
 One thread block contains 7 warps, 7 * 32 = 224 threads. 
 Each thread block is responsible for generating 7 * 7 * 80 output data.
@@ -2535,26 +2537,29 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v3(const f
     int filterOutChannel, int filterInChannel, int filterHeight, int filterWidth,
     int outputBatchNumber, int outputChannel, int outputHeight, int outputWidth) {
     
-    // warpNum(7) warps in total, each warp uses warpH (7) * Cnum (8) input data each time
+    // warpNumPerBlock(7) warps in total, each warp uses outputWidthPerWarp (7) * channelGroupSize (4) input data each time
     __shared__ float inputSharedBuffer1[7 * 7 * 4];
     __shared__ float inputSharedBuffer2[7 * 7 * 4];
 
-    // each block generates WarpW (80) output channels. every time, a block uses Cnum (4) channels in a filter
+    // each block generates outputChannelPerWarp (80) output channels. every time, a block uses channelGroupSize (4) channels in a filter
     __shared__ float filterSharedBuffer1[4 * 80];
     __shared__ float filterSharedBuffer2[4 * 80];
 
     // to hold loaded operands temp.
+    // number of inputTemp = math.ceil((horizontalRepeat * outputWidthPerWarp * channelGroupSize) / (warpNumPerBlock * WARP_SIZE))
+    // number of filterTemp = math.ceil((verticalRepeat * outputChannelPerWarp * channelGroupSize) / (warpNumPerBlock * WARP_SIZE))
     float inputTemp1 = 0;
     float filterTemp1 = 0, filterTemp2 = 0;
 
     // to hold operands
-    // same number as temp registers
+    // number of inputOperands = outputWidthPerWarp
+    // number of filterOperands = outputChannelPerWarp / (WARP_SIZE / channelGroupSize)
     float inputOperand1 = 0, inputOperand2 = 0, inputOperand3 = 0, inputOperand4 = 0, inputOperand5 = 0, inputOperand6 = 0, inputOperand7 = 0;
     float filterOperand1 = 0, filterOperand2 = 0, filterOperand3 = 0, filterOperand4 = 0, filterOperand5 = 0;
     float filterOperand6 = 0, filterOperand7 = 0, filterOperand8 = 0, filterOperand9 = 0, filterOperand10 = 0;
     
     // to hold intermediate result
-    // number of input temp * number of filter temp = 7 * 20
+    // number of input temp * number of filter temp = 7 * 10
     float input1filter1 = 0, input1filter2 = 0, input1filter3 = 0, input1filter4 = 0, input1filter5 = 0; 
     float input1filter6 = 0, input1filter7 = 0, input1filter8 = 0, input1filter9 = 0, input1filter10 = 0;
 
@@ -2579,7 +2584,7 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v3(const f
     int warpID = threadIdx.x / 32;    // each block contains 7 warps, warpID 0 - 6
     int laneID = threadIdx.x % 32;    // each warp contains 32 threads, laneID 0 - 31
 
-    // load Cnum (4) channels of data from input (7 * 7 * 4) and filter (80 * 4), and store into shared buffer 1
+    // load channelGroupSize (4) channels of data from input (total 7 * 7 * 4) and filter (total 80 * 4), and store into shared buffer 1
     // input
     int blockLoadInputStartIdx = (blockIdx.x / 2) * inputChannel * inputHeight * inputWidth;
     if(threadIdx.x < 7 * 7 * 4) {
@@ -2596,7 +2601,7 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v3(const f
     
     // For loop begins
     for(int i = 0; i < inputChannel / (2 * 4); i++) {
-        // load next group of Cnum channels
+        // load next group of channelGroupSize (4) channels of input and filter
         blockLoadInputStartIdx += 7 * 7 * 4;
         if(threadIdx.x < 7 * 7 * 4) {
             inputTemp1 = input[blockLoadInputStartIdx + threadIdx.x];
@@ -2726,7 +2731,7 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v3(const f
         __syncthreads();
 
         // Exchange shared buffer 1 and shared buffer 2 and repeat
-        // load next group of Cnum channels
+        // load next group of channelGroupSize channels of input and filter
         blockLoadInputStartIdx += 7 * 7 * 4;
         if(threadIdx.x < 7 * 7 * 4) {
             inputTemp1 = input[blockLoadInputStartIdx + threadIdx.x];
@@ -2738,7 +2743,7 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v3(const f
             filterTemp2 = filter[blockLoadFilterStartIdx + (threadIdx.x / 4) * inputChannel + (threadIdx.x % 4) + (32 / 4) * 7 * inputChannel * 1];
         }
 
-        // Copy operands from shared buffer 1 into Operands Registers
+        // Copy operands from shared buffer 2 into Operands Registers
         inputOperand1 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 0];
         inputOperand2 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 1];
         inputOperand3 = inputSharedBuffer2[warpID * 7 + (laneID % 4) * 7 * 7 + 2];
@@ -2858,7 +2863,7 @@ __global__ void InputBatch_128_Input_7x7_InChannel_576_OutChannel_160_v3(const f
     // For loop ends here
 
     // Parallel Reduction to accumulate result across threads
-    // Cnum threads form one group
+    // channelGroupSize (4) threads form one group
     #pragma unroll
     for (int offset = (4 >> 1); offset > 0; offset >>= 1) {
         input1filter1 += __shfl_down_sync(0xffffffff, input1filter1, offset, 4);
