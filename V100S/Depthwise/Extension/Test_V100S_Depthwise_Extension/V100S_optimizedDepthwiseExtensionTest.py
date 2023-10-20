@@ -34,7 +34,7 @@ def test(inputBatchNumber, inputChannel, inputHeight, inputWidth, filterHeight, 
     output1 = optimized(inputData)
     output2 = original(inputData)
     
-    if torch.allclose(output1, output2, atol=0.0001, rtol=0) is False:
+    if torch.allclose(output1, output2, atol = 0.0001, rtol = 0) is False:
         print("False")
 
     # Measure performane

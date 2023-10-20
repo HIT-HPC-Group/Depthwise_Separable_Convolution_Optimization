@@ -3,41 +3,6 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-// ===========================================================================
-// Input Size 7 x 7, Input Channel 576, Output Channel 160
-// ===========================================================================
-/*
-Pointwise Convolution Kernel
-InputBatch_1_Input_7x7_InChannel_576_OutChannel_160
-*/
-
-template <typename scalar_t>
-__global__ void InputBatch_1_Input_7x7_InChannel_576_OutChannel_160(const scalar_t* __restrict__ input, const scalar_t* __restrict__ filter, scalar_t* __restrict__ output,
-    int inputBatchNumber, int inputChannel, int inputHeight, int inputWidth,
-    int filterOutChannel, int filterInChannel, int filterHeight, int filterWidth,
-    int outputBatchNumber, int outputChannel, int outputHeight, int outputWidth) {
-
-    int channelGroup = 16;
-    int inputSize = inputChannel * inputHeight * inputWidth;
-    int inputChannelSize = inputHeight * inputWidth;
-    int outputSize = outputChannel * outputHeight * outputWidth;
-    int outputGroupSize = channelGroup * outputHeight * outputWidth;
-    int outputChannelSize = outputHeight * outputWidth;
-
-    int outputIdx = blockIdx.x * outputSize + blockIdx.y * outputGroupSize + threadIdx.z * outputChannelSize + threadIdx.y * outputWidth + threadIdx.x;
-
-    // Pointwise convolution
-    float partialResult = 0.0f;
-    for (int j = 0; j < filterInChannel; j++) {
-        int inputAccessIdx = blockIdx.x * inputSize + j * inputChannelSize + threadIdx.y * inputWidth + threadIdx.x;
-        int filterAccessIdx = (blockIdx.y * channelGroup + threadIdx.z) * filterInChannel + j;
-        partialResult += input[inputAccessIdx] * filter[filterAccessIdx];
-    }
-
-    // Store output
-    output[outputIdx] = partialResult;
-}
-
 // Use Dispatch function to invoke kernel
 torch::Tensor optimizedPointwise_cuda_forward(
     torch::Tensor input,

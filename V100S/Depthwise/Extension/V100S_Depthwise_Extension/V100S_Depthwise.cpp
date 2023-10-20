@@ -34,5 +34,5 @@ torch::Tensor optimizedDepthwise_forward(
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("forward", &optimizedDepthwise_forward, "Optimized Depthwise forward (CUDA)");
+    m.def("forward", &optimizedDepthwise_forward, "Optimized Depthwise forward (CUDA)");
 }
