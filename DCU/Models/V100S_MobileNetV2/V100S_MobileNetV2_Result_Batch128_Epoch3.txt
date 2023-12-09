@@ -1,0 +1,21 @@
+Using cuda device
+Files already downloaded and verified
+Files already downloaded and verified
+Shape of X [N, C, H, W]: torch.Size([128, 3, 224, 224])
+Shape of y: torch.Size([128]) torch.int64
+Started Warm Up
+Finished Warm Up
+Original Model Training Started
+    Original Model Epoch 0 started training!
+        Epoch 0 Accuracy of Original Model: 50.4%
+    Original Model Epoch 0 finished training!
+    Original Model Epoch 1 started training!
+        Epoch 1 Accuracy of Original Model: 66.1%
+    Original Model Epoch 1 finished training!
+    Original Model Epoch 2 started training!
+        Epoch 2 Accuracy of Original Model: 71.2%
+    Original Model Epoch 2 finished training!
+Original Model Training Ended
+Total Run time of Original model: 238.454 s
+Original Model Inference Total time: 5.437 s
+Test Accuracy of Original Model: 71.2%

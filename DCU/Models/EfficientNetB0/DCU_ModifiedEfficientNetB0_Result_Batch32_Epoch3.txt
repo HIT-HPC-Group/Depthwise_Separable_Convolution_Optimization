@@ -1,0 +1,40 @@
+Using cuda device
+Files already downloaded and verified
+Files already downloaded and verified
+Shape of X [N, C, H, W]: torch.Size([32, 3, 224, 224])
+Shape of y: torch.Size([32]) torch.int64
+Started Warm Up
+Finished Warm Up
+Modified Model Training Started
+    Modified Model Epoch 0 started training!
+    Modified Model Epoch 0 started inferencing!
+        Epoch 0 Accuracy: 34.2%
+    Modified Model Epoch 0 finished training!
+    Modified Model Epoch 1 started training!
+    Modified Model Epoch 1 started inferencing!
+        Epoch 1 Accuracy: 49.3%
+    Modified Model Epoch 1 finished training!
+    Modified Model Epoch 2 started training!
+    Modified Model Epoch 2 started inferencing!
+        Epoch 2 Accuracy: 60.6%
+    Modified Model Epoch 2 finished training!
+Modified Model Training Ended
+Total Run time of Modified model: 461.543 s
+Original Model Training Started
+    Original Model Epoch 0 started training!
+        Epoch 0 Accuracy of Original Model: 43.5%
+    Original Model Epoch 0 finished training!
+    Original Model Epoch 1 started training!
+        Epoch 1 Accuracy of Original Model: 61.3%
+    Original Model Epoch 1 finished training!
+    Original Model Epoch 2 started training!
+        Epoch 2 Accuracy of Original Model: 67.7%
+    Original Model Epoch 2 finished training!
+Original Model Training Ended
+Total Run time of Original model: 443.131 s
+Train time speed up : -4.155 %
+Modified Model Inference Total time: 10.155 s
+Test Accuracy of Modified Model: 60.6%
+Original Model Inference Total time: 9.399 s
+Test Accuracy of Original Model: 67.7%
+Test time speed up : -8.038 %

@@ -1,0 +1,2 @@
+,Model Name,Input Batch = 1 - V100S PyTorch (ms),Input Batch = 8 - V100S PyTorch (ms),Input Batch = 16 - V100S PyTorch (ms),Input Batch = 32 - V100S PyTorch (ms),Input Batch = 64 - V100S PyTorch (ms),Input Batch = 128 - V100S PyTorch (ms)
+0,MobileNet V2,9.552,6.357,6.355,11.094,21.629,43.655

@@ -1,0 +1,3 @@
+,Model Name,Input Batch = 1 - Modified (ms),Input Batch = 1 - PyTorch (ms),Speed Up (%),Input Batch = 8 - Modified (ms),Input Batch = 8 - PyTorch (ms),Speed Up (%),Input Batch = 16 - Modified (ms),Input Batch = 16 - PyTorch (ms),Speed Up (%),Input Batch = 32 - Modified (ms),Input Batch = 32 - PyTorch (ms),Speed Up (%),Input Batch = 64 - Modified (ms),Input Batch = 64 - PyTorch (ms),Speed Up (%),Input Batch = 128 - Modified (ms),Input Batch = 128 - PyTorch (ms),Speed Up (%)
+0,EfficientNet B0,15.852,18.609,14.814,16.113,18.686,13.766,18.703,18.933,1.21,32.909,29.892,-10.094,61.122,55.229,-10.67,117.148,103.385,-13.312
+,,14.362,,,9.798,,,9.849,,,15.092,,,29.434,,,59.311,,

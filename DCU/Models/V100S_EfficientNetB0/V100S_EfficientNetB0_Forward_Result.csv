@@ -1,0 +1,2 @@
+,Model Name,Input Batch = 1 - V100S PyTorch (ms),Input Batch = 8 - V100S PyTorch (ms),Input Batch = 16 - V100S PyTorch (ms),Input Batch = 32 - V100S PyTorch (ms),Input Batch = 64 - V100S PyTorch (ms),Input Batch = 128 - V100S PyTorch (ms)
+0,EfficientNet B0,14.362,9.798,9.849,15.092,29.434,59.311
